@@ -1,0 +1,69 @@
+OEL85 Command Verifier - raport
+============================================================
+Data:        2026-10-20 16:24:31
+Urządzenie:  OWON,OEL8512,25160487,FV:V2.0.1
+Połączenie:  serial COM6
+Czas testu:  16.4 s
+Przerwano:   nie
+
+Podsumowanie (testy):
+  FAIL       16
+  INFO ✓     3
+  INFO ✗     5
+  NO RESP    1
+  PASS       68
+
+Testy niezaliczone / bez odpowiedzi:
+  [NO RESP] RST - *RST - przywrócenie domyślnych (str. 7)
+      krok 2: TX '*RST' Q 'CURR?' -> '' (oczek. ≠ poprzednia) po *RST wartość ma się zmienić | Brak odpowiedzi w czasie timeoutu
+  [FAIL] SYST_SENS - SYSTem:SENSe[:STATe] - remote sense (str. 9)
+      krok 1: TX 'SYST:SENS ON' Q 'SYST:SENS?' -> '' (oczek. ON) Odpowiedź nie jest 0/1/ON/OFF
+      krok 2: TX 'SYST:SENS OFF' Q 'SYST:SENS?' -> '' (oczek. OFF) Odpowiedź nie jest 0/1/ON/OFF
+  [FAIL] SYST_SENS_01 - SYSTem:SENSe - parametr 1/0 (str. 9)
+      krok 1: TX 'SYST:SENS 1' Q 'SYST:SENS?' -> '' (oczek. 1) Odpowiedź nie jest 0/1/ON/OFF
+      krok 2: TX 'SYST:SENS 0' Q 'SYST:SENS?' -> '' (oczek. 0) Odpowiedź nie jest 0/1/ON/OFF
+  [FAIL] SYST_SENS_LONG - SYSTem:SENSe:STATe - pełna forma (str. 9)
+      krok 1: TX 'SYSTem:SENSe:STATe 1' Q 'SYSTem:SENSe:STATe?' -> '' (oczek. 1) Odpowiedź nie jest 0/1/ON/OFF
+      krok 2: TX 'SYSTem:SENSe:STATe 0' Q 'SYSTem:SENSe:STATe?' -> '' (oczek. 0) Odpowiedź nie jest 0/1/ON/OFF
+  [FAIL] MODE_ALL - MODE <tryb> - wszystkie tryby (str. 14)
+      krok 6: TX 'MODE BAT' Q 'MODE?' -> 'ocp' (oczek. battery) Inny tryb
+      krok 7: TX 'MODE OCP' Q 'MODE?' -> 'opp' (oczek. ocp) Inny tryb
+      krok 8: TX 'MODE OPP' Q 'MODE?' -> 'continuous' (oczek. opp) Inny tryb
+  [FAIL] VOLT_RANG - VOLTage:RANGe MIN/MAX (str. 17)
+      krok 2: TX 'VOLT:RANG MAX' Q 'VOLT:RANG?' -> '1' (oczek. ) MAX musi dać inną wartość niż MIN | Wartość nie zmieniła się (1)
+  [FAIL] CURR_RANG - CURRent:RANGe MIN/MAX (str. 21)
+      krok 2: TX 'CURR:RANG MAX' Q 'CURR:RANG?' -> '1' (oczek. ) Wartość nie zmieniła się (1)
+  [FAIL] DYN_HIGH_DWEL - DYNamic:HIGH:DWELl (str. 30)
+      krok 1: TX 'DYN:HIGH:DWEL 0.01' Q 'DYN:HIGH:DWEL?' -> '5.000' (oczek. 0.01) Różnica +4.99 (tol ±0.0011)
+  [FAIL] BAT_CST - BATtery:CSTop - pojemność stop (str. 36)
+      krok 1: TX 'BAT:CST 5' Q 'BAT:CST?' -> '0.200' (oczek. 5) Różnica -4.8 (tol ±0.01)
+      krok 2: TX 'BAT:CST 2.5' Q 'BAT:CST?' -> '0.200' (oczek. 2.5) Różnica -2.3 (tol ±0.005)
+  [FAIL] BAT_TIM - BATtery:TIMestop - czas stop (str. 36)
+      krok 1: TX 'BAT:TIM 50' Q 'BAT:TIM?' -> '155000' (oczek. 50) Różnica +154950 (tol ±0.1)
+      krok 2: TX 'BAT:TIM 120' Q 'BAT:TIM?' -> '155000' (oczek. 120) Różnica +154880 (tol ±0.24)
+  [FAIL] BAT_CAPA - BATtery:CAPAcity? - zmierzona pojemność (str. 38)
+      krok 1: TX '' Q 'BAT:CAPA?' -> 'ERR' (oczek. ) Odpowiedź nie jest liczbą
+  [FAIL] BAT_ENERGY - BATtery:ENERGY? - zmierzona energia (str. 39)
+      krok 1: TX '' Q 'BAT:ENERGY?' -> 'ERR' (oczek. ) Odpowiedź nie jest liczbą
+  [FAIL] BAT_TIME - BATtery:TIME? - czas testu (str. 39)
+      krok 1: TX '' Q 'BAT:TIME?' -> 'ERR' (oczek. ) Odpowiedź nie jest liczbą
+  [FAIL] BAT_STAT - BATtery:STATe? - stan (0..3) (str. 40)
+      krok 1: TX '' Q 'BAT:STAT?' -> 'ERR' (oczek. [0, 1, 2, 3]) Wartość spoza listy
+  [FAIL] BAT_ALL - BATtery:ALL? - 5 pól (V,I,Ah,Wh,s) (str. 40)
+      krok 1: TX '' Q 'BAT:ALL?' -> 'ERR' (oczek. 5) 1 pól zamiast 5
+  [FAIL] OCP_IDEL - OCP:IDELaystep (ms) (str. 42)
+      krok 1: TX 'OCP:IDEL 100' Q 'OCP:IDEL?' -> '' (oczek. 100) Odpowiedź nie jest liczbą
+      krok 2: TX 'OCP:IDEL 200' Q 'OCP:IDEL?' -> '' (oczek. 200) Odpowiedź nie jest liczbą
+  [FAIL] OPP_IDEL - OPP:IDELaystep (ms) (str. 46)
+      krok 1: TX 'OPP:IDEL 100' Q 'OPP:IDEL?' -> 'ERR' (oczek. 100) Odpowiedź nie jest liczbą
+      krok 2: TX 'OPP:IDEL 200' Q 'OPP:IDEL?' -> 'ERR' (oczek. 200) Odpowiedź nie jest liczbą
+
+Sondy (niejasności manuala / komendy nieudokumentowane):
+  [INFO ✓] SYST_REM_Q - Przykład z manuala: SYST:REM? (komenda bez zapytania) -> 1
+  [INFO ✗] MODE_OVP - MODE OVP (niespójność manuala OVP/OPP) -> -; current
+  [INFO ✗] VOLT_SLEW_RISE_SPACE - Przykład z manuala: 'VOLT:SLEW RISE FAST' (spacja zamiast ':') -> -; SLOW
+  [INFO ✓] CURR_SLEW_FALL_ENUM - CURRent:SLEW:FALL FAST (manual: parametr FAST/NORM/SLOW?) -> 1.000
+  [INFO ✗] CURR_PROT_DEL - CURRent:PROTection:DELay (wspomniane, nieudokumentowane) -> ERR
+  [INFO ✗] POW_PROT_DEL - POWer:PROTection:DELay (wspomniane, nieudokumentowane) -> ERR
+  [INFO ✗] DYN_HIGH_DEWL - Literówka ze spisu treści: DYN:HIGH:DEWLl -> 0.500
+  [INFO ✓] BAT_LONG - Pełna forma: SOURce:BATtery:VSTop? -> 10.500

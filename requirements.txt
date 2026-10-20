@@ -1,0 +1,4 @@
+pyserial>=3.5
+# opcjonalnie, tylko gdy USB OEL zgłosi się jako USBTMC (a nie wirtualny COM):
+# pyvisa>=1.13
+# pyvisa-py>=0.7

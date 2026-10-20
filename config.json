@@ -1,0 +1,48 @@
+{
+  "connection": {
+    "transport": "serial",
+    "port": "COM6",
+    "port_vid_pid": "067B:23A3",
+    "baudrate": 115200,
+    "bytesize": 8,
+    "parity": "N",
+    "stopbits": 1,
+    "timeout_s": 1.0,
+    "tx_terminator": "\\n",
+    "rx_terminator": "\\n",
+    "inter_cmd_delay_ms": 60,
+    "visa_resource": ""
+  },
+  "test": {
+    "num_abs_tol": 0.0011,
+    "num_rel_tol": 0.002,
+    "retries_on_timeout": 1,
+    "remote_before_test": true,
+    "local_after_test": true,
+    "rst_after_test": false,
+    "require_input_confirm": true,
+    "reports_dir": "reports"
+  },
+  "security": {
+    "salt": "oel85-reconext",
+    "password_hash": "3664abc81c91d0d13ad514beb6dbe2a33aba6f28097cc060e47c4226026cdde6"
+  },
+  "ui": {
+    "last_groups": [
+      "ieee",
+      "syst",
+      "mode",
+      "inp",
+      "volt",
+      "curr",
+      "res",
+      "pow",
+      "dyn",
+      "bat",
+      "ocp",
+      "opp",
+      "meas",
+      "par"
+    ]
+  }
+}
