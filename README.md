@@ -34,7 +34,14 @@ python create_exe.py           # -> dist/OEL85_Verifier.exe
 | `config.py` | `config.json` obok exe |
 | `create_exe.py` | budowa exe (PyInstaller) |
 
-**Hasło domyślne ENG/Admin: `eng123` — zmień w Panelu Admin.**
+## Hasła (domyślne — zmień w Panelu Admin → „Zmiana haseł”)
+
+| Panel | Hasło domyślne | Uwagi |
+|---|---|---|
+| ENG | `eng123` | konsola SCPI, sterowanie, pomiar, diagnostyka |
+| Admin | `admin123` | ustawienia + zmiana obu haseł; hasło Admin otwiera też panel ENG |
+
+Hasła są zapisane w `config.json` jako hash SHA-256 z solą. Przy aktualizacji z v1.0 dotychczasowe wspólne hasło staje się hasłem ENG, a hasło Admin dostaje wartość domyślną.
 
 ## Pierwsze połączenie z prawdziwym OEL
 
@@ -49,6 +56,8 @@ python create_exe.py           # -> dist/OEL85_Verifier.exe
 | PASS | odczyt zgodny z zapisaną wartością |
 | FAIL | odpowiedź inna niż oczekiwana (wartość/format) |
 | NO RESP | brak odpowiedzi na zapytanie w czasie timeoutu |
+| ODRZUCONA | urządzenie odpowiedziało `ERR` (na zapytanie albo zaraz po zapisie) |
+| ZNANY FW | niezgodność już potwierdzona na OEL8512 FW V2.0.1 — nie liczy się jako nowy błąd (lista w `command_catalog.KNOWN_FW`) |
 | ERROR | wyjątek / błąd komunikacji |
 | INFO ✓ / ✗ | **sonda** — sprawdzenie niejasności manuala lub komendy spoza manuala; nie wpływa na wynik |
 
@@ -72,3 +81,53 @@ Każdy przebieg zapisuje automatycznie `reports/OEL85_verify_<data>.csv` + `.txt
 - Sondy spoza manuala (grupa domyślnie wyłączona): `SYST:ERR?`, `*OPC?`, `*ESR?`, `*STB?`, `SYST:VERS?`, `*CLS`, nieistniejąca komenda.
 
 Wartości testowe dobrane dla OEL8512 (150 V / 40 A / 400 W). Symulator nie jest wzorcem zachowania prawdziwego urządzenia — dopiero przebieg na OEL pokaże faktyczny stan komend.
+
+## Zmiany w v1.1 (po pierwszym teście na OEL8512, FW V2.0.1)
+
+- Odpowiedź `ERR` ma osobny status **ODRZUCONA**. Po każdym zapisie aplikacja nasłuchuje przez czas „przerwy po komendzie”, czy urządzenie nie odesłało `ERR` — wtedy zapis też jest oznaczany jako odrzucony.
+- Puste linie w odpowiedzi są pomijane (czekamy na właściwą wartość); jeśli przyszła tylko pusta linia — status FAIL „Pusta linia” + HEX w logu.
+- `*RST`: pauza `rst_wait_ms` (domyślnie 2000 ms) i ponowne `SYST:REM`.
+- Panel ENG → konsola: podgląd **HEX** surowych bajtów odpowiedzi, szybki przycisk `SYST:SENS?`.
+- `DYN:HIGH:DWEL`: wartości testowe 0.5 / 1.0 s (0.01 z manuala było poniżej minimum) + sondy MIN i skan minimum.
+- `BAT:CST` / `BAT:TIM` testowane po włączeniu `BAT:CEN ON` / `BAT:TEN ON` + sondy zakresu MIN/MAX.
+- Nowa grupa **4.7b** (wymaga potwierdzenia wolnych zacisków): odczyty `BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME?` w trakcie uruchomionego testu baterii.
+- Sondy `VOLT:RANG` / `CURR:RANG` z wartościami liczbowymi (MIN/MAX zwracało `1`).
+- Sondy pełnych nazw `OCP:IDELaystep` / `OPP:IDELaystep`.
+- Osobne hasła ENG i Admin.
+- CLI na prawdziwym urządzeniu pyta o wolne zaciski przed testami INP (pominięcie: `--yes`).
+
+## Zmiany w v1.2 (po drugim przebiegu)
+
+- `*RST` restartuje OEL8512 (na UART pojawia się bajt 0x00). Aplikacja odrzuca bajty 0x00 i po `*RST` czeka, aż urządzenie znów odpowie na `*IDN?` (max `rst_wait_ms` = 10 s), potem `SYST:REM`. Driver: `OEL85.reset()` robi to samo.
+- `BAT:VST` testowane przy `BAT:VEN ON` (bez tego zapis jest cicho ignorowany), sondy zakresu MIN/MAX przy włączonych warunkach.
+- Status **ZNANY FW** dla potwierdzonych niezgodności — raport pokazuje je osobno, więc nowy FAIL = nowy problem.
+- Sonda `P_ERR_QUEUE`: czy nieudokumentowane `SYST:ERR?` rejestruje błędy (nieznana komenda, wartość poza zakresem).
+
+## OEL8512 FW V2.0.1 — co ustaliliśmy
+
+| Obszar | Wynik |
+|---|---|
+| CC/CV/CR/CP, INP/SHORT, OVP/OCP/OPP, Von, slew, DYN, OCP/OPP (bez IDEL), MEAS, PAR | działa zgodnie z manualem |
+| Odrzucony zapis | urządzenie wysyła `ERR` zaraz po komendzie (np. `CURR:SLEW:FALL FAST`, `DYN:HIGH:DWEL 0.05`) |
+| Zapis cicho ignorowany | `BAT:VST/CST/TIM` przy wyłączonym `BAT:VEN/CEN/TEN` — bez `ERR`, tylko readback to wykryje |
+| `*RST` | restart urządzenia, kilka sekund bez odpowiedzi |
+| `MODE?` | po BAT/OCP/OPP zwraca `ocp` / `opp` / `continuous` |
+| `OCP:IDEL?` | pusta linia |
+| Zaraz po `*RST` | `*IDN?` odpowiada wcześniej niż reszta; `SYST:SENS?` dawało pustą linię, `CURR?` milczało — po pełnym starcie działają |
+| `VOLT:RANG?`, `CURR:RANG?` | zawsze `1` |
+| `BAT:CAPA?/ENERGY?/TIME?/STAT?/ALL?`, `OPP:IDEL` | `ERR` (także w trakcie testu baterii) |
+| `DYN:HIGH:DWEL` | minimum 0.1 s |
+| Spoza manuala | `SYST:ERR?` → zawsze `0x0000` (nie rejestruje błędów), `SYST:VERS?` → `V2.0.1`, `*OPC?` → ciąg wersji, `*ESR?`/`*STB?` → `N/A` |
+| Zakresy BAT | `VST` 0–150 V, `CST` 0–999.999 Ah, `TIM` 0–999999 s |
+| Weryfikacja zapisu w stanowisku | `ERR` po komendzie + readback (SYST:ERR? bezużyteczne) |
+
+## Zmiany w v1.2.1
+
+- Po `*RST` czekamy najpierw na `*IDN?`, potem na `MODE?` (część sterująca startuje później), dopiero wtedy `SYST:REM`.
+- `SYST:SENS` usunięte z listy ZNANY FW — działa; pusta linia była skutkiem testu tuż po restarcie.
+
+## Zmiany w v1.2.3
+
+- Raport v1.2.2 pokazał, że po `*RST` urządzenie odpowiada na `*IDN?` i na jedno `MODE?`, a potem jeszcze przez chwilę milczy albo zwraca puste linie. Teraz po `*RST` wymagane są **3 kolejne poprawne rundy `MODE?` + `CURR?`** (max `rst_wait_ms` = 20 s). Czas do ustabilizowania jest zapisywany w raporcie przy kroku `*RST`.
+- Ta sama logika w driverze: `oel85.wait_stable_after_reset()` / `OEL85.reset()`.
+- Zalecenie dla stanowiska: nie używać `*RST` w cyklu testu — ustawiać komplet parametrów jawnie.

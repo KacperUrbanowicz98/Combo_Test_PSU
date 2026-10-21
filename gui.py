@@ -14,14 +14,14 @@ from config import APP_NAME, APP_VERSION
 from oel85 import OEL85
 from report import save_reports
 from transport import build_transport, list_serial_ports
-from verifier import Verifier, PASS, FAIL, NO_RESP, ERROR, INFO_OK, INFO_NOK
+from verifier import Verifier, PASS, FAIL, NO_RESP, ERROR, REJECTED, KNOWN, INFO_OK, INFO_NOK, BAD_STATUSES
 
 log = logging.getLogger(__name__)
 
 TRANSPORTS = [("serial", "RS232 / USB-COM"), ("visa", "VISA (USBTMC)"), ("sim", "Symulator OEL8512")]
 BAUDS = [9600, 19200, 38400, 57600, 115200]
 STATUS_COLORS = {
-    PASS: "#d7f5dd", FAIL: "#f8d0d0", NO_RESP: "#fde7c4", ERROR: "#f3b4b4",
+    PASS: "#d7f5dd", FAIL: "#f8d0d0", NO_RESP: "#fde7c4", ERROR: "#f3b4b4", REJECTED: "#f6c6e0", KNOWN: "#f3ecc2",
     INFO_OK: "#dde9fb", INFO_NOK: "#ececec",
 }
 CHK, UNCHK = "☑", "☐"
@@ -165,7 +165,7 @@ class App:
         cols = ("sent", "query", "expect", "recv", "status", "ms", "detail")
         self.tree_res = ttk.Treeview(rf, columns=cols, show="tree headings")
         heads = {"sent": ("Wysłano", 140), "query": ("Zapytanie", 120), "expect": ("Oczekiwano", 80),
-                 "recv": ("Odebrano", 160), "status": ("Status", 66), "ms": ("ms", 48), "detail": ("Szczegóły", 240)}
+                 "recv": ("Odebrano", 160), "status": ("Status", 84), "ms": ("ms", 48), "detail": ("Szczegóły", 240)}
         self.tree_res.heading("#0", text="Test / krok")
         self.tree_res.column("#0", width=230, minwidth=120, stretch=False)
         for c, (h, wdt) in heads.items():
@@ -279,7 +279,7 @@ class App:
         self._update_buttons()
 
     def _check_failed(self):
-        bad = {r.case_id for r in self.last_results if r.status in (FAIL, NO_RESP, ERROR)}
+        bad = {r.case_id for r in self.last_results if r.status in BAD_STATUSES}
         if not bad:
             messagebox.showinfo("Info", "Brak niezaliczonych testów z ostatniego przebiegu.", parent=self.root)
             return
@@ -454,8 +454,9 @@ class App:
 
     def _show_summary(self, d):
         c = d["counts"]
-        bad = c.get(FAIL, 0) + c.get(NO_RESP, 0) + c.get(ERROR, 0)
-        txt = (f"PASS {c.get(PASS, 0)}   FAIL {c.get(FAIL, 0)}   NO RESP {c.get(NO_RESP, 0)}   "
+        bad = sum(c.get(x, 0) for x in BAD_STATUSES)
+        txt = (f"PASS {c.get(PASS, 0)}   FAIL {c.get(FAIL, 0)}   ODRZUCONA {c.get(REJECTED, 0)}   "
+               f"NO RESP {c.get(NO_RESP, 0)}   ZNANY FW {c.get(KNOWN, 0)}   "
                f"ERROR {c.get(ERROR, 0)}   INFO {c.get(INFO_OK, 0) + c.get(INFO_NOK, 0)}   "
                f"({d.get('duration_s', '')} s)")
         self.lbl_summary.configure(text=txt, fg="#007a30" if not bad else "#b00000")
@@ -492,7 +493,7 @@ class App:
         if self.eng_win and self.eng_win.winfo_exists():
             self.eng_win.lift()
             return
-        if auth.ask_password(self.root, self.cfg, "Logowanie - Panel ENG"):
+        if auth.ask_password(self.root, self.cfg, "Logowanie - Panel ENG", level="eng"):
             import eng_panel
             self.eng_win = eng_panel.EngPanel(self)
 
@@ -500,7 +501,7 @@ class App:
         if self.admin_win and self.admin_win.winfo_exists():
             self.admin_win.lift()
             return
-        if auth.ask_password(self.root, self.cfg, "Logowanie - Panel Admin"):
+        if auth.ask_password(self.root, self.cfg, "Logowanie - Panel Admin", level="admin"):
             import admin_panel
             self.admin_win = admin_panel.AdminPanel(self)
 
@@ -529,7 +530,8 @@ class App:
             for _ in range(500):
                 typ, d = self.q.get_nowait()
                 if typ == "traffic":
-                    self._log_line("ERR" if d[1].startswith("<brak") else d[0], d[1])
+                    bad_rx = d[0] == "RX" and (d[1].startswith("<") or d[1].upper().startswith("ERR"))
+                    self._log_line("ERR" if bad_rx else d[0], d[1])
                 elif typ == "ev":
                     self._on_event(*d)
                 elif typ == "connected":

@@ -1,8 +1,20 @@
 """Driver OWON OEL85 (OEL8512) - wysokopoziomowe API do reużycia w stanowisku Hi-Pot + obciążenie.
 
-Składnia wg OEL85 Programming Manual V1.0.2. Używane są krótkie formy komend
-(np. CURR, VOLT:PROT). Metody nie sprawdzają odpowiedzi błędów, bo manual nie
-dokumentuje kolejki błędów (SYST:ERR?) - weryfikacja = odczyt zwrotny (readback).
+Składnia wg OEL85 Programming Manual V1.0.2. Używane są krótkie formy komend (np. CURR, VOLT:PROT).
+
+Zachowanie OEL8512 FW V2.0.1 sprawdzone weryfikatorem (2026-10-20):
+  - nieznane zapytanie -> 'ERR'; odrzucony zapis -> 'ERR' wysłane zaraz po komendzie,
+  - zapis poza zakresem / przy wyłączonym warunku BAT bywa ignorowany BEZ 'ERR' -> zawsze readback,
+  - *RST = restart urządzenia + kilka s niestabilnych odpowiedzi - użyj reset(); w stanowisku
+    lepiej nie używać *RST, tylko ustawiać komplet parametrów przed testem,
+  - MODE? po BAT/OCP/OPP zwraca 'ocp'/'opp'/'continuous',
+  - OCP:IDEL? zwraca pustą linię; VOLT:RANG?/CURR:RANG? zawsze '1',
+  - zaraz po restarcie część zapytań (np. SYST:SENS?) zwraca pustą linię / milczy, choć *IDN? już działa,
+  - BAT:CAPA?/ENERGY?/TIME?/STAT?/ALL? i OPP:IDEL -> ERR,
+  - BAT:VST/CST/TIM zapisywalne tylko przy włączonym BAT:VEN/CEN/TEN,
+  - DYN:HIGH:DWEL minimum 0.1 s,
+  - SYST:ERR? istnieje, ale zawsze zwraca 0x0000 (nie rejestruje błędów) - nie używać do weryfikacji,
+  - SYST:VERS? -> wersja FW; zakresy BAT: VST 0-150 V, CST 0-999.999 Ah, TIM 0-999999 s.
 """
 import logging
 
@@ -38,6 +50,47 @@ def _bool(resp):
     raise OEL85Error(f"Nieoczekiwana odpowiedź bool: {resp!r}")
 
 
+def wait_stable_after_reset(t, max_s=20.0, rounds=3, stop=lambda: False):
+    """Po *RST OEL8512 FW V2.0.1 restartuje się, a potem przez kilka sekund odpowiada niestabilnie:
+    *IDN? (a nawet pojedyncze MODE?) już działa, a kolejne zapytania milczą albo dają pustą linię.
+    Czekamy na *IDN?, wysyłamy SYST:REM i wymagamy `rounds` kolejnych poprawnych rund MODE? + CURR?.
+    Zwraca czas [s] do stabilności albo None (timeout / stop)."""
+    import time
+    t0 = time.monotonic()
+    deadline = t0 + max_s
+    time.sleep(1.0)
+    while True:                                   # etap 1: interfejs żyje
+        if stop() or time.monotonic() > deadline:
+            return None
+        r = t.query("*IDN?", timeout_s=0.5)
+        if r and "," in r:
+            break
+        time.sleep(0.3)
+    t.write("SYST:REM")
+    ok_rounds = 0
+    while ok_rounds < rounds:                     # etap 2: kilka poprawnych rund pod rząd
+        if stop() or time.monotonic() > deadline:
+            return None
+        m = t.query("MODE?", timeout_s=0.5)
+        c = t.query("CURR?", timeout_s=0.5)
+        good = bool(m) and not m.upper().startswith("ERR") and bool(c) and _is_number(c)
+        if good:
+            ok_rounds += 1
+        else:
+            ok_rounds = 0
+            t.write("SYST:REM")
+        time.sleep(0.3)
+    return time.monotonic() - t0
+
+
+def _is_number(s):
+    try:
+        float(s.split(",")[0])
+        return True
+    except ValueError:
+        return False
+
+
 class OEL85:
     def __init__(self, transport):
         self.t = transport
@@ -65,7 +118,8 @@ class OEL85:
 
     # ---------------------------------------------------------- surowe
     def write(self, cmd):
-        self.t.write(cmd)
+        """Zwraca niezamówioną odpowiedź po zapisie (np. 'ERR') albo None."""
+        return self.t.write(cmd)
 
     def query(self, cmd, timeout_s=None):
         return self.t.query(cmd, timeout_s)
@@ -74,8 +128,15 @@ class OEL85:
     def identify(self):
         return self.query("*IDN?")
 
-    def reset(self):
+    def reset(self, wait_s=20.0):
+        """*RST. OEL8512 FW V2.0.1 restartuje się (na UART pojawia się 0x00) i przez kilka sekund
+        nie odpowiada - czekamy na *IDN?, potem przywracamy tryb zdalny i wyłączamy wejście."""
         self.write("*RST")
+        dt = wait_stable_after_reset(self.t, wait_s)
+        if dt is None:
+            raise OEL85Error("Urządzenie niestabilne po *RST")
+        self.input_off()
+        return dt
 
     def remote(self):
         self.write("SYST:REM")
@@ -109,6 +170,9 @@ class OEL85:
         self.write(f"MODE {mode}")
 
     def get_mode(self):
+        """UWAGA OEL8512 FW V2.0.1: po MODE BAT/OCP/OPP odpowiedź MODE? to 'ocp'/'opp'/'continuous'
+        (prawdopodobnie przesunięta tabela nazw w firmware). Nie polegać na MODE? dla tych trybów,
+        dopóki nie potwierdzono na wyświetlaczu."""
         return (self.query("MODE?") or "").strip().lower()
 
     def set_cc(self, amps):

@@ -7,11 +7,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from oel85 import MODES
-from transport import SerialTransport, TransportError
+from transport import SerialTransport, TransportError, hexdump
 
 log = logging.getLogger(__name__)
 
-QUICK = ["*IDN?", "SYST:REM", "SYST:LOC", "INP?", "INP 0", "MODE?", "MEAS:ALL:INFO?", "*RST"]
+QUICK = ["*IDN?", "SYST:REM", "SYST:LOC", "INP?", "INP 0", "MODE?", "SYST:SENS?", "MEAS:ALL:INFO?", "*RST"]
 MODE_UNITS = {"CURR": ("CURR", "A"), "VOLT": ("VOLT", "V"), "POW": ("POW", "W"), "RES": ("RES", "Ω"),
               "DYN": ("DYN:HIGH", "A"), "BAT": ("BAT", "A"), "OCP": ("OCP:ISET", "A"), "OPP": ("OPP:PSET", "W")}
 
@@ -86,6 +86,8 @@ class EngPanel(tk.Toplevel):
         ttk.Button(row, text="Auto (Enter)", command=self.send_auto).pack(side="left", padx=3)
         ttk.Button(row, text="Write", command=lambda: self.send(False)).pack(side="left")
         ttk.Button(row, text="Query", command=lambda: self.send(True)).pack(side="left", padx=3)
+        self.var_hex = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row, text="HEX", variable=self.var_hex).pack(side="left", padx=(6, 0))
 
         qb = ttk.Frame(f)
         qb.pack(fill="x", pady=4)
@@ -103,6 +105,7 @@ class EngPanel(tk.Toplevel):
         self.txt_out.tag_configure("tx", foreground="#0050b0")
         self.txt_out.tag_configure("rx", foreground="#007a30")
         self.txt_out.tag_configure("err", foreground="#c00000")
+        self.txt_out.tag_configure("hex", foreground="#888888")
 
         s = ttk.LabelFrame(pw, text="Sekwencja (1 komenda / linia, # komentarz)", padding=3)
         pw.add(s, weight=2)
@@ -142,14 +145,26 @@ class EngPanel(tk.Toplevel):
         self._out(f">> {cmd}", "tx")
         t0 = time.perf_counter()
 
-        def done(r):
+        def done(res):
             ms = (time.perf_counter() - t0) * 1000
-            if isinstance(r, Exception):
-                self._out(f"!! {r}", "err")
-            elif is_query:
-                self._out(f"<< {r if r is not None else '<brak odpowiedzi - timeout>'}   ({ms:.0f} ms)",
-                          "rx" if r is not None else "err")
-        self.bg(lambda: dev.query(cmd) if is_query else dev.write(cmd), done)
+            if isinstance(res, Exception):
+                self._out(f"!! {res}", "err")
+                return
+            r, raw = res
+            bad = r is None or r == "" or r.upper().startswith("ERR")
+            if is_query:
+                txt = "<brak odpowiedzi - timeout>" if r is None else (r if r != "" else "<pusta linia>")
+                self._out(f"<< {txt}   ({ms:.0f} ms)", "err" if bad else "rx")
+            elif r:   # niezamówiona odpowiedź po zapisie (np. ERR)
+                self._out(f"<< {r}   (po zapisie)", "err" if r.upper().startswith("ERR") else "rx")
+            if self.var_hex.get() and (is_query or r) and raw:
+                self._out(f"   HEX: {hexdump(raw)}", "hex")
+
+        def work():
+            dev.t.last_raw = b""
+            r = dev.query(cmd) if is_query else dev.t.write(cmd)
+            return r, dev.t.last_raw
+        self.bg(work, done)
 
     def run_sequence(self):
         dev = self._dev()

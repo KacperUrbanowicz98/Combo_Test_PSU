@@ -8,7 +8,7 @@ import logging
 log = logging.getLogger(__name__)
 
 APP_NAME = "OEL85 Command Verifier"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.2.4"
 
 
 def app_dir():
@@ -19,6 +19,7 @@ def app_dir():
 
 
 CONFIG_PATH = os.path.join(app_dir(), "config.json")
+CONFIG_SCHEMA = 2   # podbijać przy zmianach wymagających migracji starego config.json
 
 DEFAULTS = {
     "connection": {
@@ -32,13 +33,14 @@ DEFAULTS = {
         "timeout_s": 1.0,               # timeout odczytu odpowiedzi
         "tx_terminator": "\\n",         # zapisane jako escape, patrz decode_term()
         "rx_terminator": "\\n",
-        "inter_cmd_delay_ms": 60,       # przerwa po każdej komendzie zapisu
+        "inter_cmd_delay_ms": 60,       # przerwa po każdej komendzie zapisu (w tym czasie nasłuch na ERR)
         "visa_resource": "",
     },
     "test": {
         "num_abs_tol": 0.0011,          # tolerancja bezwzględna porównania liczb
         "num_rel_tol": 0.002,           # tolerancja względna
         "retries_on_timeout": 1,        # ponowienie zapytania po braku odpowiedzi
+        "rst_wait_ms": 20000,           # max czas czekania na stabilną komunikację po *RST
         "remote_before_test": True,     # SYST:REM na starcie
         "local_after_test": True,       # SYST:LOC na końcu
         "rst_after_test": False,        # *RST na końcu
@@ -46,9 +48,11 @@ DEFAULTS = {
         "reports_dir": "reports",
     },
     "security": {
-        # sha256(salt + hasło). Domyślne hasło: eng123 -> ZMIEŃ w panelu Admin.
+        # sha256(salt + hasło). Domyślne: ENG = eng123, Admin = admin123 -> ZMIEŃ w panelu Admin.
+        # Hasło Admin otwiera też panel ENG.
         "salt": "oel85-reconext",
-        "password_hash": "",
+        "eng_password_hash": "",
+        "admin_password_hash": "",
     },
     "ui": {
         "last_groups": [],
@@ -89,10 +93,32 @@ class Config:
             except Exception as e:  # uszkodzony plik -> domyślne
                 log.error("Nie można wczytać %s: %s - używam domyślnych", self.path, e)
                 self.data = copy.deepcopy(DEFAULTS)
-        if not self.data["security"]["password_hash"]:
-            import auth
-            self.data["security"]["password_hash"] = auth.hash_password("eng123", self.data["security"]["salt"])
+        import auth
+        sec = self.data["security"]
+        changed = self._migrate()
+        if not sec.get("eng_password_hash"):
+            # migracja z v1.0 (jedno wspólne hasło) albo domyślne
+            sec["eng_password_hash"] = sec.pop("password_hash", "") or auth.hash_password("eng123", sec["salt"])
+            changed = True
+        if not sec.get("admin_password_hash"):
+            sec["admin_password_hash"] = auth.hash_password("admin123", sec["salt"])
+            changed = True
+        sec.pop("password_hash", None)
+        if changed:
             self.save()
+
+    def _migrate(self):
+        """Podnosi wartości ze starszych configów, gdy zmieniła się wymagana wartość minimalna.
+        (v1.1 zapisało rst_wait_ms=2000; od v1.2.3 potrzeba ~20 s, a stary config nadpisywał nowy default.)"""
+        ver = int(self.data.get("config_schema", 1))
+        if ver >= CONFIG_SCHEMA:
+            return False
+        t = self.data["test"]
+        if ver < 2 and int(t.get("rst_wait_ms", 0)) < 15000:   # jednorazowo; później decyduje Admin
+            log.warning("Migracja configu: rst_wait_ms %s -> 20000", t.get("rst_wait_ms"))
+            t["rst_wait_ms"] = 20000
+        self.data["config_schema"] = CONFIG_SCHEMA
+        return True
 
     def save(self):
         try:

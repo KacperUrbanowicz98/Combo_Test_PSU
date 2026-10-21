@@ -1,0 +1,58 @@
+OEL85 Command Verifier - raport
+============================================================
+Data:        2026-10-20 16:58:36
+Urządzenie:  OWON,OEL8512,25160487,FV:V2.0.1
+Połączenie:  serial COM6
+Czas testu:  27.7 s
+Przerwano:   nie
+
+Podsumowanie (testy):
+  INFO ✓     12
+  INFO ✗     14
+  NO RESP    1
+  PASS       74
+  ZNANY FW   10
+
+Testy niezaliczone / bez odpowiedzi:
+  [NO RESP] RST - *RST - przywrócenie domyślnych (str. 7)
+      krok 3: TX 'SYST:REM' Q 'CURR?' -> '' (oczek. ≠ poprzednia) po *RST wartość ma się zmienić | Brak odpowiedzi w czasie timeoutu
+
+Znane niezgodności firmware (potwierdzone wcześniej, nie liczone jako nowe błędy):
+  MODE_ALL - [znane FW] MODE? po MODE BAT/OCP/OPP zwraca 'ocp'/'opp'/'continuous'
+  VOLT_RANG - [znane FW] VOLT:RANG? zawsze zwraca 1 (MIN/MAX i wartości liczbowe)
+  CURR_RANG - [znane FW] CURR:RANG? zawsze zwraca 1 (MIN/MAX i wartości liczbowe)
+  BAT_CAPA - [znane FW] zapytanie nieobsługiwane (ERR), także w trakcie testu baterii
+  BAT_ENERGY - [znane FW] zapytanie nieobsługiwane (ERR), także w trakcie testu baterii
+  BAT_TIME - [znane FW] zapytanie nieobsługiwane (ERR), także w trakcie testu baterii
+  BAT_STAT - [znane FW] zapytanie nieobsługiwane (ERR), także w trakcie testu baterii
+  BAT_ALL - [znane FW] zapytanie nieobsługiwane (ERR), także w trakcie testu baterii
+  OCP_IDEL - [znane FW] OCP:IDEL? zwraca pustą linię - wartość sprawdzaj na wyświetlaczu
+  OPP_IDEL - [znane FW] OPP:IDEL nieobsługiwane (ERR), także pełna nazwa IDELaystep
+
+Sondy (niejasności manuala / komendy nieudokumentowane):
+  [INFO ✓] SYST_REM_Q - Przykład z manuala: SYST:REM? (komenda bez zapytania) -> 1
+  [INFO ✗] MODE_OVP - MODE OVP (niespójność manuala OVP/OPP) -> -; current
+  [INFO ✗] VOLT_RANG_LOHI - VOLTage:RANGe liczbowo 10 V -> 150 V (zamiast MIN/MAX) -> 1; 1
+  [INFO ✗] VOLT_SLEW_RISE_SPACE - Przykład z manuala: 'VOLT:SLEW RISE FAST' (spacja zamiast ':') -> -; SLOW
+  [INFO ✗] CURR_RANG_LOHI - CURRent:RANGe liczbowo 3 A -> 40 A (zamiast MIN/MAX) -> 1; 1
+  [INFO ✗] CURR_SLEW_FALL_ENUM - CURRent:SLEW:FALL FAST (manual: parametr FAST/NORM/SLOW?) -> 1.000
+  [INFO ✗] CURR_PROT_DEL - CURRent:PROTection:DELay (wspomniane, nieudokumentowane) -> ERR
+  [INFO ✗] POW_PROT_DEL - POWer:PROTection:DELay (wspomniane, nieudokumentowane) -> ERR
+  [INFO ✗] DYN_HIGH_DEWL - Literówka ze spisu treści: DYN:HIGH:DEWLl -> 1.000
+  [INFO ✓] DYN_DWEL_MINQ - DYN:HIGH:DWEL MIN - minimalny czas -> 0.100
+  [INFO ✗] DYN_DWEL_SCAN - Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s -> 0.200; 0.100; 0.100; 0.100
+  [INFO ✓] BAT_VST_RANGE - BAT:VST MIN/MAX (przy VEN ON) -> -; 0.000; 150.000; -
+  [INFO ✓] BAT_CST_RANGE - BAT:CST MIN/MAX - zakres pojemności (przy CEN ON) -> -; 0.000; 999.999; -
+  [INFO ✓] BAT_TIM_RANGE - BAT:TIM MIN/MAX - zakres czasu (przy TEN ON) -> -; 0; 999999; -
+  [INFO ✓] BAT_LONG - Pełna forma: SOURce:BATtery:VSTop? -> 150.000
+  [INFO ✗] BAT_RUN - BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii -> -; -; -; ERR; ERR; ERR; ERR; ERR; ERR; -
+  [INFO ✗] OCP_IDEL_LONG - OCP:IDELaystep - pełna nazwa -> <pusta linia>
+  [INFO ✗] OPP_IDEL_LONG - OPP:IDELaystep - pełna nazwa -> ERR
+  [INFO ✓] P_ERR - SYSTem:ERRor? - kolejka błędów -> 0x0000
+  [INFO ✗] P_ERR_QUEUE - SYST:ERR? - czy rejestruje błędy? -> 0x0000; 0x0000; 0x0000; 0x0000; 0x0000
+  [INFO ✓] P_OPC - *OPC? -> V2.12.2B.1C.D
+  [INFO ✓] P_ESR - *ESR? -> N/A
+  [INFO ✓] P_STB - *STB? -> N/A
+  [INFO ✓] P_VERS - SYSTem:VERSion? -> V2.0.1
+  [INFO ✓] P_CLS - *CLS -> OWON,OEL8512,25160487,FV:V2.0.1
+  [INFO ✗] P_BAD - Nieistniejąca komenda (reakcja na błąd) -> ERR

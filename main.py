@@ -55,6 +55,12 @@ def run_cli(args, cfg):
     sel = [(g, list(g.cases)) for g in groups
            if (want is None and (g.default_on or args.probes)) or (want and g.key in want)]
 
+    if any(c.needs_input_confirm for _, cs in sel for c in cs) and not args.sim and not args.yes:
+        print("UWAGA: testy włączają wejście (INP 1) i zwarcie (INP:SHOR 1).\n"
+              "Zaciski OEL muszą być WOLNE, Hi-Pot wyłączony / HV odłączone.")
+        if input("Kontynuować? [t/N]: ").strip().lower() not in ("t", "tak", "y", "yes"):
+            return 3
+
     def ev(typ, d):
         if typ == "group":
             print(f"\n== {d}")
@@ -75,7 +81,8 @@ def run_cli(args, cfg):
         "summary": {**s, "duration_s": "", "aborted": ""}})
     print("Raport:", csv_p)
     t.close()
-    fails = sum(n for k, n in s["counts"].items() if k in ("FAIL", "NO RESP", "ERROR"))
+    from verifier import BAD_STATUSES
+    fails = sum(n for k, n in s["counts"].items() if k in BAD_STATUSES)
     return 1 if fails else 0
 
 
@@ -88,6 +95,7 @@ def main():
     p.add_argument("--groups", help="lista grup, np. ieee,syst,volt (domyślnie wszystkie)")
     p.add_argument("--probes", action="store_true", help="dołącz sondy komend spoza manuala")
     p.add_argument("--force", action="store_true", help="kontynuuj mimo braku *IDN?")
+    p.add_argument("--yes", action="store_true", help="bez pytania o wolne zaciski (testy INP)")
     p.add_argument("-v", "--verbose", action="store_true", help="pokaż ruch TX/RX")
     args = p.parse_args()
 

@@ -17,6 +17,7 @@
     "num_abs_tol": 0.0011,
     "num_rel_tol": 0.002,
     "retries_on_timeout": 1,
+    "rst_wait_ms": 20000,
     "remote_before_test": true,
     "local_after_test": true,
     "rst_after_test": false,
@@ -25,7 +26,8 @@
   },
   "security": {
     "salt": "oel85-reconext",
-    "password_hash": "3664abc81c91d0d13ad514beb6dbe2a33aba6f28097cc060e47c4226026cdde6"
+    "eng_password_hash": "3664abc81c91d0d13ad514beb6dbe2a33aba6f28097cc060e47c4226026cdde6",
+    "admin_password_hash": "0cc4cc4e588ea00a2fa512e6ab6562ed92e86077aa78c050f03abbfb78375cd0"
   },
   "ui": {
     "last_groups": [
@@ -39,10 +41,13 @@
       "pow",
       "dyn",
       "bat",
+      "batrun",
       "ocp",
       "opp",
       "meas",
-      "par"
+      "par",
+      "probe"
     ]
-  }
+  },
+  "config_schema": 2
 }

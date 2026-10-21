@@ -39,22 +39,27 @@ class AdminPanel(tk.Toplevel):
         self._row(f2, 1, "Tolerancja względna", ("test", "num_rel_tol"), t["num_rel_tol"])
         self._row(f2, 2, "Ponowienia przy timeout", ("test", "retries_on_timeout"), t["retries_on_timeout"])
         self._row(f2, 3, "Folder raportów", ("test", "reports_dir"), t["reports_dir"])
+        self._row(f2, 4, "Pauza po *RST [ms]", ("test", "rst_wait_ms"), t["rst_wait_ms"])
         for i, (k, lbl) in enumerate((("remote_before_test", "SYST:REM przed testem"),
                                       ("local_after_test", "SYST:LOC po teście"),
                                       ("rst_after_test", "*RST po teście"),
                                       ("require_input_confirm", "Potwierdzenie przed testami INP/SHORT"))):
             v = tk.BooleanVar(value=bool(t[k]))
             self.vars[("test", k)] = v
-            ttk.Checkbutton(f2, text=lbl, variable=v).grid(row=4 + i, column=0, columnspan=2, sticky="w")
+            ttk.Checkbutton(f2, text=lbl, variable=v).grid(row=5 + i, column=0, columnspan=2, sticky="w")
 
-        f3 = ttk.LabelFrame(self, text="Zmiana hasła ENG/Admin", padding=8)
+        f3 = ttk.LabelFrame(self, text="Zmiana haseł (Admin otwiera też panel ENG)", padding=8)
         f3.pack(fill="x", padx=8, pady=6)
+        ttk.Label(f3, text="Poziom").grid(row=0, column=0, sticky="w")
+        self.pw_level = tk.StringVar(value="ENG")
+        ttk.Combobox(f3, textvariable=self.pw_level, values=["ENG", "Admin"], state="readonly",
+                     width=17).grid(row=0, column=1, padx=4, sticky="w")
         self.pw1, self.pw2 = tk.StringVar(), tk.StringVar()
-        ttk.Label(f3, text="Nowe hasło").grid(row=0, column=0, sticky="w")
-        ttk.Entry(f3, textvariable=self.pw1, show="•", width=20).grid(row=0, column=1, padx=4)
-        ttk.Label(f3, text="Powtórz").grid(row=1, column=0, sticky="w")
-        ttk.Entry(f3, textvariable=self.pw2, show="•", width=20).grid(row=1, column=1, padx=4, pady=2)
-        ttk.Button(f3, text="Zmień hasło", command=self.change_pw).grid(row=0, column=2, rowspan=2, padx=8)
+        ttk.Label(f3, text="Nowe hasło").grid(row=1, column=0, sticky="w")
+        ttk.Entry(f3, textvariable=self.pw1, show="•", width=20).grid(row=1, column=1, padx=4, pady=2)
+        ttk.Label(f3, text="Powtórz").grid(row=2, column=0, sticky="w")
+        ttk.Entry(f3, textvariable=self.pw2, show="•", width=20).grid(row=2, column=1, padx=4, pady=2)
+        ttk.Button(f3, text="Zmień hasło", command=self.change_pw).grid(row=1, column=2, rowspan=2, padx=8)
 
         b = ttk.Frame(self, padding=8)
         b.pack(fill="x")
@@ -116,9 +121,8 @@ class AdminPanel(tk.Toplevel):
         if a != b:
             messagebox.showwarning("Hasło", "Hasła się różnią.", parent=self)
             return
-        self.cfg.security["password_hash"] = auth.hash_password(a, self.cfg.security["salt"])
-        self.cfg.save()
-        log.warning("ZMIANA HASŁA ENG/Admin")
+        level = "admin" if self.pw_level.get() == "Admin" else "eng"
+        auth.set_password(self.cfg, level, a)
         self.pw1.set("")
         self.pw2.set("")
-        messagebox.showinfo("Hasło", "Hasło zmienione.", parent=self)
+        messagebox.showinfo("Hasło", f"Hasło {self.pw_level.get()} zmienione.", parent=self)

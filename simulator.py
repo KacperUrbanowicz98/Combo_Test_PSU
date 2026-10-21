@@ -2,8 +2,7 @@
 
 Implementuje zestaw komend z OEL85 Programming Manual V1.0.2 (styczeń 2025),
 w formie kanonicznej (z dwukropkami, wg sekcji 'Format'). Nieznane komendy
-są ignorowane, a nieznane zapytania nie dostają odpowiedzi (timeout) - tak
-zwykle zachowują się tanie obciążenia bez kolejki błędów SCPI.
+są ignorowane, a nieznane zapytania dostają 'ERR' (jak prawdziwy OEL8512 FW V2.0.1).
 To NIE jest wzorzec zachowania prawdziwego urządzenia - prawdę pokaże dopiero test na OEL.
 """
 import random
@@ -153,7 +152,7 @@ class OEL85Simulator:
             is_query = header.endswith("?")
             c = canonical(header.rstrip("?"))
             if c is None:
-                return None
+                return "ERR" if is_query else None   # jak OEL8512 FW V2.0.1: nieznane zapytanie -> ERR
             return self._query(c, arg) if is_query else self._write(c, arg)
 
     # -------------------------------------------------- zapytania
@@ -191,7 +190,7 @@ class OEL85Simulator:
             return "Master"
         if c == "PAR:NUM":
             return "1"
-        return None  # nieznane -> brak odpowiedzi
+        return "ERR"  # nieznane zapytanie -> ERR (zachowanie zaobserwowane na OEL8512 FW V2.0.1)
 
     @staticmethod
     def _fmt(v):

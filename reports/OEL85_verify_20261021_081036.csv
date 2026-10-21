@@ -1,0 +1,228 @@
+﻿ID;Grupa;Test;Krok;Wysłano;Zapytanie;Oczekiwano;Odebrano;Status;Czas [ms];Szczegóły;Str. manuala;Rodzaj
+IDN;ieee;*IDN? - identyfikacja;1;;*IDN?;^[^,]+,[^,]+,[^,]+,[^,]+$;OWON,OEL8512,25160487,FV:V2.0.1;PASS;4,1;;7;doc
+RST;ieee;*RST - przywrócenie domyślnych;1;CURR 3.21;CURR?;3.21;3.210;PASS;95,1;ustaw wartość niedomyślną | ;7;doc
+RST;ieee;*RST - przywrócenie domyślnych;2;*RST;;;;FAIL;2731,9;pauza rst_wait_ms (OEL nie odpowiada w trakcie resetu) | komunikacja NIESTABILNA do końca rst_wait_ms;7;doc
+RST;ieee;*RST - przywrócenie domyślnych;3;SYST:REM;MODE?;;;NO RESP;2131,1;tryb domyślny po *RST (diagnostyka) | Brak odpowiedzi w czasie timeoutu;7;doc
+RST;ieee;*RST - przywrócenie domyślnych;4;MODE CURR;CURR?;≠ poprzednia;<pusta linia>;FAIL;1083,7;"po *RST wartość ma się zmienić; MODE CURR na wypadek gdyby CURR? milczało poza trybem CC | Pusta linia zamiast wartości (HEX w logu / Panel ENG)";7;doc
+SYST_REM;syst;SYSTem:REMote;1;SYST:REM;*IDN?;odpowiedź na *IDN?;OWON,OEL8512,25160487,FV:V2.0.1;PASS;96,2;Urządzenie odpowiada po komendzie;9;doc
+SYST_SENS;syst;SYSTem:SENSe[:STATe] - remote sense;1;SYST:SENS ON;SYST:SENS?;ON;ON;PASS;91,4;;9;doc
+SYST_SENS;syst;SYSTem:SENSe[:STATe] - remote sense;2;SYST:SENS OFF;SYST:SENS?;OFF;OFF;PASS;94,1;;9;doc
+SYST_SENS_01;syst;SYSTem:SENSe - parametr 1/0;1;SYST:SENS 1;SYST:SENS?;1;ON;PASS;91,5;;9;doc
+SYST_SENS_01;syst;SYSTem:SENSe - parametr 1/0;2;SYST:SENS 0;SYST:SENS?;0;OFF;PASS;93,6;;9;doc
+SYST_SENS_LONG;syst;SYSTem:SENSe:STATe - pełna forma;1;SYSTem:SENSe:STATe 1;SYSTem:SENSe:STATe?;1;ON;PASS;94,2;;9;doc
+SYST_SENS_LONG;syst;SYSTem:SENSe:STATe - pełna forma;2;SYSTem:SENSe:STATe 0;SYSTem:SENSe:STATe?;0;OFF;PASS;93,4;;9;doc
+SYST_LOC;syst;SYSTem:LOCal (+ powrót do REM);1;SYST:LOC;*IDN?;odpowiedź na *IDN?;OWON,OEL8512,25160487,FV:V2.0.1;PASS;94,1;Urządzenie odpowiada po komendzie;9;doc
+SYST_LOC;syst;SYSTem:LOCal (+ powrót do REM);2;SYST:REM;*IDN?;odpowiedź na *IDN?;OWON,OEL8512,25160487,FV:V2.0.1;PASS;94,9;przywrócenie trybu zdalnego | Urządzenie odpowiada po komendzie;9;doc
+SYST_REM_Q;syst;Przykład z manuala: SYST:REM? (komenda bez zapytania);1;;SYST:REM?;;1;INFO ✓;2,9;;9;probe
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;1;MODE CURR;MODE?;current;current;PASS;92,4;;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;2;MODE VOLT;MODE?;voltage;voltage;PASS;91,9;;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;3;MODE POW;MODE?;power;power;PASS;91,8;;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;4;MODE RES;MODE?;resistance;resistance;PASS;94,5;;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;5;MODE DYN;MODE?;dynamic;dynamic;PASS;93,8;;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;6;MODE BAT;MODE?;battery;ocp;ZNANY FW;91,2;Inny tryb;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;7;MODE OCP;MODE?;ocp;opp;ZNANY FW;93,1;Inny tryb;14;doc
+MODE_ALL;mode;MODE <tryb> - wszystkie tryby;8;MODE OPP;MODE?;opp;continuous;ZNANY FW;96,2;Inny tryb;14;doc
+FUNC_ALL;mode;FUNCtion <tryb> - alias MODE;1;FUNC CURR;FUNC?;current;current;PASS;91,9;;14;doc
+FUNC_ALL;mode;FUNCtion <tryb> - alias MODE;2;FUNC VOLT;FUNC?;voltage;voltage;PASS;92,9;;14;doc
+FUNC_ALL;mode;FUNCtion <tryb> - alias MODE;3;FUNC POW;FUNC?;power;power;PASS;95,0;;14;doc
+FUNC_ALL;mode;FUNCtion <tryb> - alias MODE;4;FUNC RES;FUNC?;resistance;resistance;PASS;93,3;;14;doc
+MODE_LONG;mode;SOURce:FUNCtion - pełna forma;1;SOURce:FUNCtion RESistance;SOURce:FUNCtion?;resistance;resistance;PASS;93,0;;14;doc
+MODE_LONG;mode;SOURce:FUNCtion - pełna forma;2;SOURce:FUNCtion CURRent;SOURce:FUNCtion?;current;current;PASS;92,5;;14;doc
+MODE_OVP;mode;MODE OVP (niespójność manuala OVP/OPP);1;MODE CURR;;;;INFO ✓;84,7;krok pomocniczy;14;probe
+MODE_OVP;mode;MODE OVP (niespójność manuala OVP/OPP);2;MODE OVP;MODE?;ovp;current;INFO ✗;68,2;Zapis odrzucony (ERR po komendzie) | odczyt: Inny tryb;14;probe
+INP;inp;INPut <bool> - 1/0;1;INP 1;INP?;1;ON;PASS;94,9;;15;doc
+INP;inp;INPut <bool> - 1/0;2;INP 0;INP?;0;OFF;PASS;93,4;;15;doc
+INP_ONOFF;inp;INPut <bool> - ON/OFF;1;INP ON;INP?;ON;ON;PASS;97,1;;15;doc
+INP_ONOFF;inp;INPut <bool> - ON/OFF;2;INP OFF;INP?;OFF;OFF;PASS;93,6;;15;doc
+INP_SHOR;inp;INPut:SHORt <bool>;1;INP:SHOR 1;INP:SHOR?;1;ON;PASS;94,5;;15;doc
+INP_SHOR;inp;INPut:SHORt <bool>;2;INP:SHOR 0;INP:SHOR?;0;OFF;PASS;93,3;;15;doc
+VOLT_RANG;volt;VOLTage:RANGe MIN/MAX;1;VOLT:RANG MIN;VOLT:RANG?;;1;PASS;66,1;;17;doc
+VOLT_RANG;volt;VOLTage:RANGe MIN/MAX;2;VOLT:RANG MAX;VOLT:RANG?;;1;ZNANY FW;93,6;MAX musi dać inną wartość niż MIN | Wartość nie zmieniła się (1);17;doc
+VOLT_RANG_NUM;volt;VOLTage:RANGe <liczba> (150 V);1;VOLT:RANG 150;VOLT:RANG?;150;1;PASS;91,7;;17;doc
+VOLT_RANG_LOHI;volt;VOLTage:RANGe liczbowo 10 V -> 150 V (zamiast MIN/MAX);1;VOLT:RANG 10;VOLT:RANG?;;1;INFO ✓;64,0;;17;probe
+VOLT_RANG_LOHI;volt;VOLTage:RANGe liczbowo 10 V -> 150 V (zamiast MIN/MAX);2;VOLT:RANG 150;VOLT:RANG?;;1;INFO ✗;92,8;Wartość nie zmieniła się (1);17;probe
+VOLT_SLEW;volt;VOLTage:SLEW[:BOTH];1;VOLT:SLEW FAST;VOLT:SLEW?;FAST;FAST FAST;PASS;92,0;;17;doc
+VOLT_SLEW;volt;VOLTage:SLEW[:BOTH];2;VOLT:SLEW SLOW;VOLT:SLEW?;SLOW;SLOW SLOW;PASS;91,5;;17;doc
+VOLT_SLEW;volt;VOLTage:SLEW[:BOTH];3;VOLT:SLEW NORM;VOLT:SLEW?;NORM;NORM NORM;PASS;93,8;;17;doc
+VOLT_SLEW_BOTH;volt;VOLTage:SLEW:BOTH - pełna forma;1;VOLT:SLEW:BOTH SLOW;VOLT:SLEW:BOTH?;SLOW;SLOW SLOW;PASS;94,2;;17;doc
+VOLT_SLEW_BOTH;volt;VOLTage:SLEW:BOTH - pełna forma;2;VOLT:SLEW:BOTH NORM;VOLT:SLEW:BOTH?;NORM;NORM NORM;PASS;94,1;;17;doc
+VOLT_SLEW_RISE;volt;VOLTage:SLEW:RISE;1;VOLT:SLEW:RISE FAST;VOLT:SLEW:RISE?;FAST;FAST;PASS;91,4;;18;doc
+VOLT_SLEW_RISE;volt;VOLTage:SLEW:RISE;2;VOLT:SLEW:RISE SLOW;VOLT:SLEW:RISE?;SLOW;SLOW;PASS;93,3;;18;doc
+VOLT_SLEW_RISE;volt;VOLTage:SLEW:RISE;3;VOLT:SLEW:RISE NORM;VOLT:SLEW:RISE?;NORM;NORM;PASS;93,7;;18;doc
+VOLT_SLEW_FALL;volt;VOLTage:SLEW:FALL;1;VOLT:SLEW:FALL FAST;VOLT:SLEW:FALL?;FAST;FAST;PASS;93,3;;18;doc
+VOLT_SLEW_FALL;volt;VOLTage:SLEW:FALL;2;VOLT:SLEW:FALL SLOW;VOLT:SLEW:FALL?;SLOW;SLOW;PASS;93,1;;18;doc
+VOLT_SLEW_FALL;volt;VOLTage:SLEW:FALL;3;VOLT:SLEW:FALL NORM;VOLT:SLEW:FALL?;NORM;NORM;PASS;94,8;;18;doc
+VOLT_SLEW_RISE_SPACE;volt;Przykład z manuala: 'VOLT:SLEW RISE FAST' (spacja zamiast ':');1;VOLT:SLEW:RISE SLOW;;;;INFO ✓;87,5;krok pomocniczy;18;probe
+VOLT_SLEW_RISE_SPACE;volt;Przykład z manuala: 'VOLT:SLEW RISE FAST' (spacja zamiast ':');2;VOLT:SLEW RISE FAST;VOLT:SLEW:RISE?;FAST;SLOW;INFO ✗;66,9;Zapis odrzucony (ERR po komendzie) | odczyt: Inna wartość;18;probe
+VOLT_PROT;volt;VOLTage:PROTection[:LEVel];1;VOLT:PROT 120.5;VOLT:PROT?;120.5;120.500;PASS;92,8;;19;doc
+VOLT_PROT;volt;VOLTage:PROTection[:LEVel];2;VOLT:PROT 100;VOLT:PROT?;100;100.000;PASS;93,0;;19;doc
+VOLT_PROT_MINMAX;volt;VOLTage:PROTection MIN/MAX;1;VOLT:PROT MIN;VOLT:PROT?;;0.000;PASS;92,7;;19;doc
+VOLT_PROT_MINMAX;volt;VOLTage:PROTection MIN/MAX;2;VOLT:PROT MAX;VOLT:PROT?;;155.000;PASS;95,6;0 → 155;19;doc
+VOLT_ON;volt;VOLTage[:LEVel]:ON (Von);1;VOLT:ON 3.5;VOLT:ON?;3.5;3.500;PASS;92,3;;19;doc
+VOLT_ON;volt;VOLTage[:LEVel]:ON (Von);2;VOLT:ON 1.25;VOLT:ON?;1.25;1.250;PASS;92,9;;19;doc
+VOLT_LEV_ON;volt;VOLTage:LEVel:ON - pełna forma;1;VOLT:LEV:ON 2.0;VOLT:LEV:ON?;2.0;2.000;PASS;92,2;;19;doc
+VOLT;volt;VOLTage (CV setpoint);1;VOLT 12.5;VOLT?;12.5;12.500;PASS;92,7;;20;doc
+VOLT;volt;VOLTage (CV setpoint);2;VOLT 5.25;VOLT?;5.25;5.250;PASS;92,7;;20;doc
+VOLT_LONG;volt;SOURce:VOLTage:LEVel:IMMediate:AMPLitude;1;SOURce:VOLTage:LEVel:IMMediate:AMPLitude 7.5;SOURce:VOLTage:LEVel:IMMediate:AMPLitude?;7.5;7.500;PASS;98,3;;20;doc
+CURR_RANG;curr;CURRent:RANGe MIN/MAX;1;CURR:RANG MIN;CURR:RANG?;;1;PASS;65,8;;21;doc
+CURR_RANG;curr;CURRent:RANGe MIN/MAX;2;CURR:RANG MAX;CURR:RANG?;;1;ZNANY FW;92,3;Wartość nie zmieniła się (1);21;doc
+CURR_RANG_LOHI;curr;CURRent:RANGe liczbowo 3 A -> 40 A (zamiast MIN/MAX);1;CURR:RANG 3;CURR:RANG?;;1;INFO ✓;93,2;;21;probe
+CURR_RANG_LOHI;curr;CURRent:RANGe liczbowo 3 A -> 40 A (zamiast MIN/MAX);2;CURR:RANG 40;CURR:RANG?;;1;INFO ✗;95,5;Wartość nie zmieniła się (1);21;probe
+CURR_SLEW;curr;CURRent:SLEW[:BOTH] (A/µs);1;CURR:SLEW 1.0;CURR:SLEW?;1.0;1.000 1.000;PASS;96,5;;21;doc
+CURR_SLEW;curr;CURRent:SLEW[:BOTH] (A/µs);2;CURR:SLEW 0.5;CURR:SLEW?;0.5;0.500 0.500;PASS;93,8;;21;doc
+CURR_SLEW_RISE;curr;CURRent:SLEW:RISE (A/µs);1;CURR:SLEW:RISE 1.0;CURR:SLEW:RISE?;1.0;1.000;PASS;93,3;;22;doc
+CURR_SLEW_RISE;curr;CURRent:SLEW:RISE (A/µs);2;CURR:SLEW:RISE 0.5;CURR:SLEW:RISE?;0.5;0.500;PASS;92,3;;22;doc
+CURR_SLEW_FALL;curr;CURRent:SLEW:FALL (A/µs);1;CURR:SLEW:FALL 0.5;CURR:SLEW:FALL?;0.5;0.500;PASS;95,0;;22;doc
+CURR_SLEW_FALL;curr;CURRent:SLEW:FALL (A/µs);2;CURR:SLEW:FALL 1.0;CURR:SLEW:FALL?;1.0;1.000;PASS;91,9;;22;doc
+CURR_SLEW_FALL_ENUM;curr;CURRent:SLEW:FALL FAST (manual: parametr FAST/NORM/SLOW?);1;CURR:SLEW:FALL FAST;CURR:SLEW:FALL?;FAST;1.000;INFO ✗;78,1;Zapis odrzucony (ERR po komendzie);22;probe
+CURR_PROT;curr;CURRent:PROTection[:LEVel];1;CURR:PROT 20.5;CURR:PROT?;20.5;20.500;PASS;93,0;;23;doc
+CURR_PROT;curr;CURRent:PROTection[:LEVel];2;CURR:PROT 10;CURR:PROT?;10;10.000;PASS;93,8;;23;doc
+CURR_PROT_MINMAX;curr;CURRent:PROTection MIN/MAX;1;CURR:PROT MIN;CURR:PROT?;;0.000;PASS;91,4;;23;doc
+CURR_PROT_MINMAX;curr;CURRent:PROTection MIN/MAX;2;CURR:PROT MAX;CURR:PROT?;;44.000;PASS;94,1;0 → 44;23;doc
+CURR_PROT_DEL;curr;CURRent:PROTection:DELay (wspomniane, nieudokumentowane);1;CURR:PROT:DEL 1;CURR:PROT:DEL?;1;ERR;INFO ✗;104,7;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;23;probe
+CURR;curr;CURRent (CC setpoint);1;CURR 1.5;CURR?;1.5;1.500;PASS;97,8;;23;doc
+CURR;curr;CURRent (CC setpoint);2;CURR 2.75;CURR?;2.75;2.750;PASS;93,5;;23;doc
+CURR_LONG;curr;SOURce:CURRent:LEVel:IMMediate:AMPLitude;1;SOURce:CURRent:LEVel:IMMediate:AMPLitude 0.75;SOURce:CURRent:LEVel:IMMediate:AMPLitude?;0.75;0.750;PASS;98,6;;23;doc
+CURR_LIM;curr;CURRent:LIMit (CV current limit);1;CURR:LIM 5;CURR:LIM?;5;5.000;PASS;72,0;;24;doc
+CURR_LIM;curr;CURRent:LIMit (CV current limit);2;CURR:LIM 3.5;CURR:LIM?;3.5;3.500;PASS;94,0;;24;doc
+RES;res;RESistance (CR setpoint);1;RES 10;RES?;10;10.000;PASS;68,7;;25;doc
+RES;res;RESistance (CR setpoint);2;RES 47.5;RES?;47.5;47.500;PASS;94,7;;25;doc
+RES_SLEW_RISE;res;RESistance:SLEW:RISE;1;RES:SLEW:RISE FAST;RES:SLEW:RISE?;FAST;FAST;PASS;89,4;;25;doc
+RES_SLEW_RISE;res;RESistance:SLEW:RISE;2;RES:SLEW:RISE SLOW;RES:SLEW:RISE?;SLOW;SLOW;PASS;94,2;;25;doc
+RES_SLEW_RISE;res;RESistance:SLEW:RISE;3;RES:SLEW:RISE NORM;RES:SLEW:RISE?;NORM;NORM;PASS;91,9;;25;doc
+RES_SLEW_FALL;res;RESistance:SLEW:FALL;1;RES:SLEW:FALL FAST;RES:SLEW:FALL?;FAST;FAST;PASS;93,9;;26;doc
+RES_SLEW_FALL;res;RESistance:SLEW:FALL;2;RES:SLEW:FALL SLOW;RES:SLEW:FALL?;SLOW;SLOW;PASS;94,1;;26;doc
+RES_SLEW_FALL;res;RESistance:SLEW:FALL;3;RES:SLEW:FALL NORM;RES:SLEW:FALL?;NORM;NORM;PASS;92,8;;26;doc
+POW_PROT;pow;POWer:PROTection[:LEVel];1;POW:PROT 350;POW:PROT?;350;350.000;PASS;70,0;;27;doc
+POW_PROT;pow;POWer:PROTection[:LEVel];2;POW:PROT 200;POW:PROT?;200;200.000;PASS;69,7;;27;doc
+POW_PROT_DEL;pow;POWer:PROTection:DELay (wspomniane, nieudokumentowane);1;POW:PROT:DEL 1;POW:PROT:DEL?;1;ERR;INFO ✗;105,1;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;27;probe
+POW;pow;POWer (CP setpoint);1;POW 50;POW?;50;50.000;PASS;99,2;;27;doc
+POW;pow;POWer (CP setpoint);2;POW 25.5;POW?;25.5;25.500;PASS;93,8;;27;doc
+POW_SLEW_RISE;pow;POWer:SLEW:RISE;1;POW:SLEW:RISE FAST;POW:SLEW:RISE?;FAST;FAST;PASS;91,9;;28;doc
+POW_SLEW_RISE;pow;POWer:SLEW:RISE;2;POW:SLEW:RISE SLOW;POW:SLEW:RISE?;SLOW;SLOW;PASS;92,1;;28;doc
+POW_SLEW_RISE;pow;POWer:SLEW:RISE;3;POW:SLEW:RISE NORM;POW:SLEW:RISE?;NORM;NORM;PASS;95,0;;28;doc
+POW_SLEW_FALL;pow;POWer:SLEW:FALL;1;POW:SLEW:FALL FAST;POW:SLEW:FALL?;FAST;FAST;PASS;94,1;;28;doc
+POW_SLEW_FALL;pow;POWer:SLEW:FALL;2;POW:SLEW:FALL SLOW;POW:SLEW:FALL?;SLOW;SLOW;PASS;96,4;;28;doc
+POW_SLEW_FALL;pow;POWer:SLEW:FALL;3;POW:SLEW:FALL NORM;POW:SLEW:FALL?;NORM;NORM;PASS;92,5;;28;doc
+POW_PROT_MAX;pow;POWer:PROTection MAX (przywrócenie);1;POW:PROT MAX;POW:PROT?;;420.000;PASS;93,9;;27;doc
+DYN_HIGH;dyn;DYNamic:HIGH[:LEVel];1;DYN:HIGH 10;DYN:HIGH?;10;10.000;PASS;70,1;;30;doc
+DYN_HIGH;dyn;DYNamic:HIGH[:LEVel];2;DYN:HIGH 5;DYN:HIGH?;5;5.000;PASS;95,6;;30;doc
+DYN_HIGH_DWEL;dyn;DYNamic:HIGH:DWELl;1;DYN:HIGH:DWEL 0.5;DYN:HIGH:DWEL?;0.5;0.500;PASS;95,1;;30;doc
+DYN_HIGH_DWEL;dyn;DYNamic:HIGH:DWELl;2;DYN:HIGH:DWEL 1.0;DYN:HIGH:DWEL?;1.0;1.000;PASS;77,6;;30;doc
+DYN_LOW;dyn;DYNamic:LOW[:LEVel];1;DYN:LOW 1;DYN:LOW?;1;1.000;PASS;76,1;;31;doc
+DYN_LOW;dyn;DYNamic:LOW[:LEVel];2;DYN:LOW 0.5;DYN:LOW?;0.5;0.500;PASS;91,6;;31;doc
+DYN_LOW_DWEL;dyn;DYNamic:LOW:DWELl;1;DYN:LOW:DWEL 1;DYN:LOW:DWEL?;1;1.000;PASS;94,7;;31;doc
+DYN_LOW_DWEL;dyn;DYNamic:LOW:DWELl;2;DYN:LOW:DWEL 0.2;DYN:LOW:DWEL?;0.2;0.200;PASS;75,8;;31;doc
+DYN_SLEW;dyn;DYNamic:SLEW (A/µs);1;DYN:SLEW 1.0;DYN:SLEW?;1.0;1.000 1.000;PASS;91,3;;32;doc
+DYN_SLEW;dyn;DYNamic:SLEW (A/µs);2;DYN:SLEW 0.5;DYN:SLEW?;0.5;0.500 0.500;PASS;100,4;;32;doc
+DYN_SLEW_RISE;dyn;DYNamic:SLEW:RISE;1;DYN:SLEW:RISE 1.0;DYN:SLEW:RISE?;1.0;1.000;PASS;74,1;;32;doc
+DYN_SLEW_RISE;dyn;DYNamic:SLEW:RISE;2;DYN:SLEW:RISE 0.5;DYN:SLEW:RISE?;0.5;0.500;PASS;90,6;;32;doc
+DYN_SLEW_FALL;dyn;DYNamic:SLEW:FALL;1;DYN:SLEW:FALL 0.5;DYN:SLEW:FALL?;0.5;0.500;PASS;97,7;;33;doc
+DYN_SLEW_FALL;dyn;DYNamic:SLEW:FALL;2;DYN:SLEW:FALL 1.0;DYN:SLEW:FALL?;1.0;1.000;PASS;94,2;;33;doc
+DYN_MODE;dyn;DYNamic:MODE CONT/PULS;1;DYN:MODE PULS;DYN:MODE?;PULS;pulse;PASS;75,6;;33;doc
+DYN_MODE;dyn;DYNamic:MODE CONT/PULS;2;DYN:MODE CONT;DYN:MODE?;CONT;continuous;PASS;95,7;;33;doc
+DYN_MODE_LONG;dyn;DYNamic:MODE - pełne nazwy;1;DYN:MODE PULSe;DYN:MODE?;PULSe;pulse;PASS;76,3;;33;doc
+DYN_MODE_LONG;dyn;DYNamic:MODE - pełne nazwy;2;DYN:MODE CONTinuous;DYN:MODE?;CONTinuous;continuous;PASS;95,1;;33;doc
+DYN_HIGH_DEWL;dyn;Literówka ze spisu treści: DYN:HIGH:DEWLl;1;DYN:HIGH:DEWL 0.7;DYN:HIGH:DWEL?;0.7;1.000;INFO ✗;76,2;Różnica +0.3 (tol ±0.0014);12;probe
+DYN_DWEL_MINQ;dyn;DYN:HIGH:DWEL MIN - minimalny czas;1;DYN:HIGH:DWEL MIN;DYN:HIGH:DWEL?;;0.100;INFO ✓;93,1;;30;probe
+DYN_DWEL_SCAN;dyn;Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s;1;DYN:HIGH:DWEL 0.2;DYN:HIGH:DWEL?;0.2;0.200;INFO ✓;90,8;;30;probe
+DYN_DWEL_SCAN;dyn;Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s;2;DYN:HIGH:DWEL 0.1;DYN:HIGH:DWEL?;0.1;0.100;INFO ✓;94,3;;30;probe
+DYN_DWEL_SCAN;dyn;Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s;3;DYN:HIGH:DWEL 0.05;DYN:HIGH:DWEL?;0.05;0.100;INFO ✗;76,9;Zapis odrzucony (ERR po komendzie) | odczyt: Różnica +0.05 (tol ±0.0011);30;probe
+DYN_DWEL_SCAN;dyn;Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s;4;DYN:HIGH:DWEL 0.02;DYN:HIGH:DWEL?;0.02;0.100;INFO ✗;78,2;Zapis odrzucony (ERR po komendzie) | odczyt: Różnica +0.08 (tol ±0.0011);30;probe
+BAT;bat;BATtery[:LEVel] - prąd rozładowania;1;BAT 2;BAT?;2;2.000;PASS;71,6;;35;doc
+BAT;bat;BATtery[:LEVel] - prąd rozładowania;2;BAT 1.5;BAT?;1.5;1.500;PASS;93,3;;35;doc
+BAT_VST;bat;BATtery:VSTop - napięcie odcięcia (przy VEN ON);1;BAT:VEN ON;;;;PASS;67,3;FW V2.0.1: wartość stop zapisywalna tylko przy włączonym warunku | krok pomocniczy;35;doc
+BAT_VST;bat;BATtery:VSTop - napięcie odcięcia (przy VEN ON);2;BAT:VST 5;BAT:VST?;5;5.000;PASS;72,2;;35;doc
+BAT_VST;bat;BATtery:VSTop - napięcie odcięcia (przy VEN ON);3;BAT:VST 10.5;BAT:VST?;10.5;10.500;PASS;95,2;;35;doc
+BAT_VST;bat;BATtery:VSTop - napięcie odcięcia (przy VEN ON);4;BAT:VEN OFF;;;;PASS;67,9;krok pomocniczy;35;doc
+BAT_VEN;bat;BATtery:VENabstop;1;BAT:VEN ON;BAT:VEN?;ON;ON;PASS;73,6;;37;doc
+BAT_VEN;bat;BATtery:VENabstop;2;BAT:VEN OFF;BAT:VEN?;OFF;OFF;PASS;95,1;;37;doc
+BAT_CEN;bat;BATtery:CENabstop;1;BAT:CEN ON;BAT:CEN?;ON;ON;PASS;101,2;;37;doc
+BAT_CEN;bat;BATtery:CENabstop;2;BAT:CEN OFF;BAT:CEN?;OFF;OFF;PASS;97,6;;37;doc
+BAT_TEN;bat;BATtery:TENabstop;1;BAT:TEN ON;BAT:TEN?;ON;ON;PASS;78,9;;38;doc
+BAT_TEN;bat;BATtery:TENabstop;2;BAT:TEN OFF;BAT:TEN?;OFF;OFF;PASS;76,3;;38;doc
+BAT_CST;bat;BATtery:CSTop - pojemność stop (przy CEN ON);1;BAT:CEN ON;;;;PASS;66,7;v1.1: najpierw włącz warunek pojemności | krok pomocniczy;36;doc
+BAT_CST;bat;BATtery:CSTop - pojemność stop (przy CEN ON);2;BAT:CST 5;BAT:CST?;5;5.000;PASS;75,7;;36;doc
+BAT_CST;bat;BATtery:CSTop - pojemność stop (przy CEN ON);3;BAT:CST 2.5;BAT:CST?;2.5;2.500;PASS;78,1;;36;doc
+BAT_CST;bat;BATtery:CSTop - pojemność stop (przy CEN ON);4;BAT:CEN OFF;;;;PASS;66,4;krok pomocniczy;36;doc
+BAT_TIM;bat;BATtery:TIMestop - czas stop (przy TEN ON);1;BAT:TEN ON;;;;PASS;93,8;v1.1: najpierw włącz warunek czasu | krok pomocniczy;36;doc
+BAT_TIM;bat;BATtery:TIMestop - czas stop (przy TEN ON);2;BAT:TIM 50;BAT:TIM?;50;50;PASS;73,5;;36;doc
+BAT_TIM;bat;BATtery:TIMestop - czas stop (przy TEN ON);3;BAT:TIM 120;BAT:TIM?;120;120;PASS;77,3;;36;doc
+BAT_TIM;bat;BATtery:TIMestop - czas stop (przy TEN ON);4;BAT:TEN OFF;;;;PASS;66,5;krok pomocniczy;36;doc
+BAT_VST_RANGE;bat;BAT:VST MIN/MAX (przy VEN ON);1;BAT:VEN ON;;;;INFO ✓;61,9;krok pomocniczy;35;probe
+BAT_VST_RANGE;bat;BAT:VST MIN/MAX (przy VEN ON);2;BAT:VST MIN;BAT:VST?;;0.000;INFO ✓;72,6;;35;probe
+BAT_VST_RANGE;bat;BAT:VST MIN/MAX (przy VEN ON);3;BAT:VST MAX;BAT:VST?;;150.000;INFO ✓;84,3;0 → 150;35;probe
+BAT_VST_RANGE;bat;BAT:VST MIN/MAX (przy VEN ON);4;BAT:VEN OFF;;;;INFO ✓;66,4;krok pomocniczy;35;probe
+BAT_CST_RANGE;bat;BAT:CST MIN/MAX - zakres pojemności (przy CEN ON);1;BAT:CEN ON;;;;INFO ✓;63,5;krok pomocniczy;36;probe
+BAT_CST_RANGE;bat;BAT:CST MIN/MAX - zakres pojemności (przy CEN ON);2;BAT:CST MIN;BAT:CST?;;0.000;INFO ✓;71,9;;36;probe
+BAT_CST_RANGE;bat;BAT:CST MIN/MAX - zakres pojemności (przy CEN ON);3;BAT:CST MAX;BAT:CST?;;999.999;INFO ✓;79,3;0 → 999.999;36;probe
+BAT_CST_RANGE;bat;BAT:CST MIN/MAX - zakres pojemności (przy CEN ON);4;BAT:CEN OFF;;;;INFO ✓;64,9;krok pomocniczy;36;probe
+BAT_TIM_RANGE;bat;BAT:TIM MIN/MAX - zakres czasu (przy TEN ON);1;BAT:TEN ON;;;;INFO ✓;62,7;krok pomocniczy;36;probe
+BAT_TIM_RANGE;bat;BAT:TIM MIN/MAX - zakres czasu (przy TEN ON);2;BAT:TIM MIN;BAT:TIM?;;0;INFO ✓;74,1;;36;probe
+BAT_TIM_RANGE;bat;BAT:TIM MIN/MAX - zakres czasu (przy TEN ON);3;BAT:TIM MAX;BAT:TIM?;;999999;INFO ✓;77,7;0 → 999999;36;probe
+BAT_TIM_RANGE;bat;BAT:TIM MIN/MAX - zakres czasu (przy TEN ON);4;BAT:TEN OFF;;;;INFO ✓;66,0;krok pomocniczy;36;probe
+BAT_CAPA;bat;BATtery:CAPAcity? - zmierzona pojemność;1;;BAT:CAPA?;;ERR;ZNANY FW;16,7;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;doc
+BAT_ENERGY;bat;BATtery:ENERGY? - zmierzona energia;1;;BAT:ENERGY?;;ERR;ZNANY FW;16,5;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;39;doc
+BAT_TIME;bat;BATtery:TIME? - czas testu;1;;BAT:TIME?;;ERR;ZNANY FW;14,8;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;39;doc
+BAT_STAT;bat;BATtery:STATe? - stan (0..3);1;;BAT:STAT?;[0, 1, 2, 3];ERR;ZNANY FW;14,3;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;40;doc
+BAT_ALL;bat;BATtery:ALL? - 5 pól (V,I,Ah,Wh,s);1;;BAT:ALL?;5;ERR;ZNANY FW;14,0;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;40;doc
+BAT_LONG;bat;Pełna forma: SOURce:BATtery:VSTop?;1;;SOURce:BATtery:VSTop?;;150.000;INFO ✓;13,4;;35;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;1;BAT 0.1;;;;INFO ✓;62,5;prąd 0.1 A | krok pomocniczy;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;2;BAT:VST 1;;;;INFO ✓;61,7;odcięcie 1 V - przy wolnych zaciskach test kończy się od razu | krok pomocniczy;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;3;BAT:VEN ON;;;;INFO ✓;62,8;krok pomocniczy;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;4;INP 1;BAT:STAT?;[0, 1, 2, 3];ERR;INFO ✗;1577,4;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;5;;BAT:ALL?;5;ERR;INFO ✗;14,4;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;6;;BAT:CAPA?;;ERR;INFO ✗;14,6;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;7;;BAT:ENERGY?;;ERR;INFO ✗;15,3;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;8;;BAT:TIME?;;ERR;INFO ✗;14,7;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;9;INP 0;BAT:STAT?;[0, 1, 2, 3];ERR;INFO ✗;79,7;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;38;probe
+BAT_RUN;batrun;BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii;10;BAT:VEN OFF;;;;INFO ✓;62,2;krok pomocniczy;38;probe
+OCP_VON;ocp;OCP:VON;1;OCP:VON 5;OCP:VON?;5;5.000;PASS;73,3;;41;doc
+OCP_VON;ocp;OCP:VON;2;OCP:VON 3;OCP:VON?;3;3.000;PASS;78,2;;41;doc
+OCP_IMAX;ocp;OCP:IMAX;1;OCP:IMAX 10;OCP:IMAX?;10;10.000;PASS;79,0;;43;doc
+OCP_IMAX;ocp;OCP:IMAX;2;OCP:IMAX 8;OCP:IMAX?;8;8.000;PASS;77,8;;43;doc
+OCP_ISET;ocp;OCP:ISET;1;OCP:ISET 1;OCP:ISET?;1;1.000;PASS;78,1;;41;doc
+OCP_ISET;ocp;OCP:ISET;2;OCP:ISET 2;OCP:ISET?;2;2.000;PASS;78,2;;41;doc
+OCP_IST;ocp;OCP:ISTep;1;OCP:IST 0.5;OCP:IST?;0.5;0.500;PASS;94,0;;42;doc
+OCP_IST;ocp;OCP:ISTep;2;OCP:IST 0.1;OCP:IST?;0.1;0.100;PASS;94,2;;42;doc
+OCP_IDEL;ocp;OCP:IDELaystep (ms);1;OCP:IDEL 100;OCP:IDEL?;100;<pusta linia>;ZNANY FW;1111,1;Pusta linia zamiast wartości (HEX w logu / Panel ENG);42;doc
+OCP_IDEL;ocp;OCP:IDELaystep (ms);2;OCP:IDEL 200;OCP:IDEL?;200;<pusta linia>;ZNANY FW;1086,5;Pusta linia zamiast wartości (HEX w logu / Panel ENG);42;doc
+OCP_IDEL_LONG;ocp;OCP:IDELaystep - pełna nazwa;1;OCP:IDELaystep 150;OCP:IDELaystep?;150;<pusta linia>;INFO ✗;1065,5;Pusta linia zamiast wartości (HEX w logu / Panel ENG);42;probe
+OCP_VOCP;ocp;OCP:VOCP;1;OCP:VOCP 5;OCP:VOCP?;5;5.000;PASS;74,0;;43;doc
+OCP_VOCP;ocp;OCP:VOCP;2;OCP:VOCP 4;OCP:VOCP?;4;4.000;PASS;95,4;;43;doc
+OPP_VON;opp;OPP:VON;1;OPP:VON 5;OPP:VON?;5;5.000;PASS;75,1;;45;doc
+OPP_VON;opp;OPP:VON;2;OPP:VON 3;OPP:VON?;3;3.000;PASS;78,2;;45;doc
+OPP_PMAX;opp;OPP:PMAX;1;OPP:PMAX 100;OPP:PMAX?;100;100.000;PASS;78,3;;47;doc
+OPP_PMAX;opp;OPP:PMAX;2;OPP:PMAX 80;OPP:PMAX?;80;80.000;PASS;78,7;;47;doc
+OPP_PMIN;opp;OPP:PMIN;1;OPP:PMIN 10;OPP:PMIN?;10;10.000;PASS;79,2;;48;doc
+OPP_PMIN;opp;OPP:PMIN;2;OPP:PMIN 5;OPP:PMIN?;5;5.000;PASS;76,5;;48;doc
+OPP_PSET;opp;OPP:PSET;1;OPP:PSET 20;OPP:PSET?;20;20.000;PASS;78,9;;45;doc
+OPP_PSET;opp;OPP:PSET;2;OPP:PSET 30;OPP:PSET?;30;30.000;PASS;77,5;;45;doc
+OPP_PST;opp;OPP:PSTep;1;OPP:PST 5;OPP:PST?;5;5.000;PASS;100,1;;46;doc
+OPP_PST;opp;OPP:PSTep;2;OPP:PST 2;OPP:PST?;2;2.000;PASS;75,5;;46;doc
+OPP_IDEL;opp;OPP:IDELaystep (ms);1;OPP:IDEL 100;OPP:IDEL?;100;ERR;ZNANY FW;81,5;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;46;doc
+OPP_IDEL;opp;OPP:IDELaystep (ms);2;OPP:IDEL 200;OPP:IDEL?;200;ERR;ZNANY FW;79,5;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;46;doc
+OPP_IDEL_LONG;opp;OPP:IDELaystep - pełna nazwa;1;OPP:IDELaystep 150;OPP:IDELaystep?;150;ERR;INFO ✗;79,2;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;46;probe
+OPP_VOPP;opp;OPP:VOPP;1;OPP:VOPP 5;OPP:VOPP?;5;5.000;PASS;104,2;;47;doc
+OPP_VOPP;opp;OPP:VOPP;2;OPP:VOPP 4;OPP:VOPP?;4;4.000;PASS;77,7;;47;doc
+MEAS_VOLT;meas;MEASure:VOLTage?;1;;MEAS:VOLT?;;0.000;PASS;10,2;;50;doc
+MEAS_CURR;meas;MEASure:CURRent?;1;;MEAS:CURR?;;0.0000;PASS;10,4;;50;doc
+MEAS_POW;meas;MEASure:POWer?;1;;MEAS:POW?;;0.000;PASS;21,7;;50;doc
+MEAS_LONG;meas;MEASure:SCALar:VOLTage:DC? - pełna forma;1;;MEASure:SCALar:VOLTage:DC?;;0.000;PASS;13,7;;50;doc
+MEAS_ALL;meas;MEASure:ALL:INFO? - V,I,P,OVP,OCP,OPP;1;;MEAS:ALL:INFO?;^\s*[-+0-9.eE]+\s*,\s*[-+0-9.eE]+\s*,\s*[-+0-9.eE]+\s*,\s*(ON|OFF|0|1)\s*,\s*(ON|OFF|0|1)\s*,\s*(ON|OFF|0|1)\s*$;0.000,0.000,0.000,OFF,OFF,OFF;PASS;13,6;;51;doc
+PAR;par;:PARallel[:STATe]?;1;;:PAR?;;OFF;PASS;10,6;;53;doc
+PAR_STAT;par;:PARallel:STATe? - pełna forma;1;;:PARallel:STATe?;;OFF;PASS;13,9;;53;doc
+PAR_IDEN;par;:PARallel:Identity?;1;;:PARallel:Identity?;;SLAVE;PASS;15,6;;53;doc
+PAR_NUM;par;:PARallel:NUMber?;1;;:PAR:NUM?;;0;PASS;13,7;;53;doc
+P_ERR;probe;SYSTem:ERRor? - kolejka błędów;1;;SYST:ERR?;;0x0000;INFO ✓;2,9;;0;probe
+P_ERR_QUEUE;probe;SYST:ERR? - czy rejestruje błędy?;1;;SYST:ERR?;;0x0000;INFO ✓;2,8;stan wyjściowy | ;0;probe
+P_ERR_QUEUE;probe;SYST:ERR? - czy rejestruje błędy?;2;FOO:BAR 1;SYST:ERR?;;0x0000;INFO ✗;90,6;po nieznanej komendzie kod powinien się zmienić | Odpowiedź bez zmian;0;probe
+P_ERR_QUEUE;probe;SYST:ERR? - czy rejestruje błędy?;3;;SYST:ERR?;;0x0000;INFO ✓;2,8;czy odczyt czyści błąd? | ;0;probe
+P_ERR_QUEUE;probe;SYST:ERR? - czy rejestruje błędy?;4;CURR 999;SYST:ERR?;;0x0000;INFO ✗;75,8;wartość poza zakresem (OEL8512: 40 A) | Zapis odrzucony (ERR po komendzie) | odczyt: Odpowiedź bez zmian;0;probe
+P_ERR_QUEUE;probe;SYST:ERR? - czy rejestruje błędy?;5;;SYST:ERR?;;0x0000;INFO ✓;2,9;;0;probe
+P_OPC;probe;*OPC?;1;;*OPC?;;V2.12.2B.1C.D;INFO ✓;3,0;;0;probe
+P_ESR;probe;*ESR?;1;;*ESR?;;N/A;INFO ✓;2,2;;0;probe
+P_STB;probe;*STB?;1;;*STB?;;N/A;INFO ✓;2,2;;0;probe
+P_VERS;probe;SYSTem:VERSion?;1;;SYST:VERS?;;V2.0.1;INFO ✓;2,6;;0;probe
+P_CLS;probe;*CLS;1;*CLS;*IDN?;odpowiedź na *IDN?;OWON,OEL8512,25160487,FV:V2.0.1;INFO ✓;96,3;Urządzenie odpowiada po komendzie;0;probe
+P_BAD;probe;Nieistniejąca komenda (reakcja na błąd);1;;FOO:BAR?;;ERR;INFO ✗;14,3;Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia;0;probe

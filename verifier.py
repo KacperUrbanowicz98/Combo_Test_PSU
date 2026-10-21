@@ -6,12 +6,20 @@ import time
 from dataclasses import dataclass, field, asdict
 
 from transport import TransportError
+from oel85 import wait_stable_after_reset
 
 log = logging.getLogger(__name__)
 
 PASS, FAIL, NO_RESP, ERROR, SKIP = "PASS", "FAIL", "NO RESP", "ERROR", "SKIP"
+REJECTED = "ODRZUCONA"          # urządzenie odpowiedziało 'ERR' (na zapytanie albo po zapisie)
+KNOWN = "ZNANY FW"              # niezgodność już potwierdzona na OEL8512 FW V2.0.1 (nie liczy się jako nowy błąd)
 INFO_OK, INFO_NOK = "INFO ✓", "INFO ✗"
-_SEVERITY = {PASS: 0, SKIP: 0, INFO_OK: 1, INFO_NOK: 2, NO_RESP: 3, FAIL: 4, ERROR: 5}
+_SEVERITY = {PASS: 0, SKIP: 0, INFO_OK: 1, INFO_NOK: 2, KNOWN: 2.5, NO_RESP: 3, FAIL: 4, REJECTED: 5, ERROR: 6}
+BAD_STATUSES = (FAIL, NO_RESP, REJECTED, ERROR)
+
+
+def is_err(resp):
+    return bool(resp) and resp.strip().upper().startswith("ERR")
 
 
 def worst(statuses):
@@ -72,6 +80,10 @@ def evaluate(step, resp, prev_resp, tol_abs, tol_rel):
     if resp is None:
         return NO_RESP, "Brak odpowiedzi w czasie timeoutu"
     r = resp.strip()
+    if is_err(r):
+        return REJECTED, "Urządzenie zwróciło ERR - komenda nieobsługiwana / błędna składnia"
+    if r == "":
+        return FAIL, "Pusta linia zamiast wartości (HEX w logu / Panel ENG)"
     if cmp == "any":
         return (PASS, "") if r else (FAIL, "Pusta odpowiedź")
     if cmp in ("num", "num_any", "changed"):
@@ -90,6 +102,8 @@ def evaluate(step, resp, prev_resp, tol_abs, tol_rel):
         if abs(v - e) <= tol:
             return PASS, ""
         return FAIL, f"Różnica {v - e:+g} (tol ±{tol:g})"
+    if cmp == "differs":
+        return (PASS, f"{prev_resp} → {r}") if r != (prev_resp or "").strip() else (FAIL, "Odpowiedź bez zmian")
     if cmp == "enum":
         return (PASS, "") if _enum_match(r, exp) else (FAIL, "Inna wartość")
     if cmp == "bool":
@@ -151,6 +165,16 @@ class Verifier:
         self.t.write("INP:SHOR 0")
         self.t.write("INP 0")
 
+    def _rst_wait(self):
+        """Czekaj na stabilną komunikację po *RST. Zwraca czas [s] albo None."""
+        dt = wait_stable_after_reset(self.t, int(self.cfg.get("rst_wait_ms", 20000)) / 1000,
+                                     stop=lambda: self.stopped)
+        if dt is None:
+            log.warning("Urządzenie niestabilne po *RST (rst_wait_ms)")
+        else:
+            log.info("Urządzenie stabilne po *RST po %.1f s", dt)
+        return dt
+
     def _teardown(self):
         """Zawsze - także po STOP/błędzie: wejście OFF, zwarcie OFF, sense OFF."""
         for cmd in ("INP:SHOR 0", "INP 0", "SYST:SENS 0"):
@@ -161,6 +185,8 @@ class Verifier:
         try:
             if self.cfg.get("rst_after_test"):
                 self.t.write("*RST")
+                self._rst_wait()
+                self.t.write("SYST:REM")
                 self.t.write("INP 0")
             if self.cfg.get("local_after_test", True):
                 self.t.write("SYST:LOC")
@@ -184,7 +210,8 @@ class Verifier:
                     continue
                 self._emit("group", group.name)
                 for cmd in group.pre:
-                    self.t.write(cmd)
+                    if is_err(self.t.write(cmd)):
+                        log.warning("Komenda przygotowująca %s odrzucona (ERR)", cmd)
                 for case in cases:
                     if self.stopped:
                         break
@@ -221,9 +248,18 @@ class Verifier:
             t0 = time.perf_counter()
             resp = None
             status, detail = PASS, ""
+            write_err = False
+            rst_info = None
             try:
                 if st.send:
-                    self.t.write(st.send)
+                    write_err = is_err(self.t.write(st.send))
+                    if st.send.strip().upper().startswith("*RST"):
+                        dt = self._rst_wait()
+                        rst_info = (f"komunikacja stabilna po {dt:.1f} s" if dt is not None
+                                    else "komunikacja NIESTABILNA do końca rst_wait_ms "
+                                         f"({int(self.cfg.get('rst_wait_ms', 20000)) / 1000:.0f} s)")
+                    if st.wait_ms:
+                        time.sleep(st.wait_ms / 1000)
                 if st.cmp == "alive":
                     resp = self._query("*IDN?")
                     status, detail = (PASS, "Urządzenie odpowiada po komendzie") if resp else \
@@ -233,6 +269,13 @@ class Verifier:
                     status, detail = evaluate(st, resp, prev_resp, tol_abs, tol_rel)
                 else:
                     status, detail = PASS, "krok pomocniczy"
+                if rst_info:
+                    detail = rst_info
+                    if "NIESTABILNA" in rst_info:
+                        status = FAIL
+                if write_err and status != ERROR:
+                    status = REJECTED
+                    detail = "Zapis odrzucony (ERR po komendzie)" + (f" | odczyt: {detail}" if detail else "")
             except TransportError:
                 raise
             except Exception as e:
@@ -245,13 +288,22 @@ class Verifier:
                 exp_txt = "odpowiedź na *IDN?"
             sr = StepResult(case.id, case.group, case.title, i, st.send or "", st.query or
                             ("*IDN?" if st.cmp == "alive" else ""), exp_txt,
-                            "" if resp is None else resp, status, round(ms, 1),
+                            "" if resp is None else (resp or "<pusta linia>"), status, round(ms, 1),
                             (st.note + " | " if st.note else "") + detail, case.page, case.kind)
             steps.append(sr)
-            if resp is not None:
+            if resp and not is_err(resp) and not st.keep_prev:
                 prev_resp = resp
+        note = case.note
+        if case.known_issue:
+            hit = False
+            for s in steps:
+                if s.status in BAD_STATUSES and (not case.known_steps or s.step_no in case.known_steps):
+                    s.status = KNOWN
+                    hit = True
+            if hit:
+                note = f"[znane FW] {case.known_issue}"
         status = worst([s.status for s in steps]) if steps else SKIP
-        return CaseResult(case.id, case.group, case.title, status, steps, case.page, case.kind, case.note)
+        return CaseResult(case.id, case.group, case.title, status, steps, case.page, case.kind, note)
 
     def summary(self):
         c = {}

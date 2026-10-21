@@ -13,6 +13,7 @@ Typy porównań (cmp):
   any      - jakakolwiek niepusta odpowiedź
   fields   - odpowiedź CSV z dokładnie `expect` polami
   regex    - dopasowanie wyrażenia regularnego
+  differs  - tekst odpowiedzi inny niż w poprzednim kroku
   int_in   - liczba całkowita z listy `expect`
   alive    - tylko zapis; potem *IDN? musi odpowiedzieć (urządzenie nie zawiesiło się)
   none     - zapis bez weryfikacji (krok pomocniczy)
@@ -35,6 +36,8 @@ class Step:
     expect: Any = None
     cmp: str = "none"
     note: str = ""
+    wait_ms: int = 0            # pauza po zapisie (przed zapytaniem)
+    keep_prev: bool = False     # odpowiedź nie staje się 'poprzednią' dla cmp=changed/differs
 
 
 @dataclass
@@ -47,6 +50,8 @@ class TestCase:
     kind: str = "doc"           # doc | probe
     note: str = ""
     needs_input_confirm: bool = False
+    known_issue: str = ""       # potwierdzona niezgodność FW -> status 'ZNANY FW' zamiast FAIL
+    known_steps: tuple = ()     # których kroków dotyczy (puste = wszystkich)
 
     @property
     def command(self):
@@ -93,8 +98,11 @@ def build_catalog():
           note="Format: <Factory>,<model>,<serial>,<wersja>"),
         TestCase("RST", "", "*RST - przywrócenie domyślnych", [
             Step(send="CURR 3.21", query="CURR?", expect=3.21, cmp="num", note="ustaw wartość niedomyślną"),
-            Step(send="*RST", query="CURR?", expect=3.21, cmp="changed", note="po *RST wartość ma się zmienić"),
-        ], page=7, note="Weryfikacja: wartość CURR po *RST różni się od ustawionej"),
+            Step(send="*RST", cmp="none", note="pauza rst_wait_ms (OEL nie odpowiada w trakcie resetu)"),
+            Step(send="SYST:REM", query="MODE?", cmp="any", keep_prev=True, note="tryb domyślny po *RST (diagnostyka)"),
+            Step(send="MODE CURR", query="CURR?", expect=3.21, cmp="changed",
+                 note="po *RST wartość ma się zmienić; MODE CURR na wypadek gdyby CURR? milczało poza trybem CC"),
+        ], page=7, note="v1.2.2: po *RST czekamy na *IDN? i MODE?, potem SYST:REM + MODE CURR"),
     ]))
 
     # ------------------------------------------------------------ 3. System
@@ -118,7 +126,8 @@ def build_catalog():
              ("DYN", "dynamic"), ("BAT", "battery"), ("OCP", "ocp"), ("OPP", "opp")]
     G.append(Group("mode", "4. Tryb (FUNCtion / MODE)", cases=[
         TestCase("MODE_ALL", "", "MODE <tryb> - wszystkie tryby", [
-            Step(send=f"MODE {m}", query="MODE?", expect=r, cmp="mode") for m, r in modes], page=14),
+            Step(send=f"MODE {m}", query="MODE?", expect=r, cmp="mode") for m, r in modes], page=14,
+            note="FW V2.0.1: BAT->'ocp', OCP->'opp', OPP->'continuous' (przesunięcie nazw?) - sprawdź wyświetlacz"),
         TestCase("FUNC_ALL", "", "FUNCtion <tryb> - alias MODE", [
             Step(send=f"FUNC {m}", query="FUNC?", expect=r, cmp="mode") for m, r in modes[:4]], page=14),
         TestCase("MODE_LONG", "", "SOURce:FUNCtion - pełna forma", [
@@ -149,6 +158,10 @@ def build_catalog():
         ], page=17),
         rw("VOLT_RANG_NUM", "VOLTage:RANGe <liczba> (150 V)", "VOLT:RANG {}", "VOLT:RANG?", [150], cmp="num_any",
            page=17, note="Odczyt może zwrócić granicę zakresu - sprawdzamy tylko format"),
+        TestCase("VOLT_RANG_LOHI", "", "VOLTage:RANGe liczbowo 10 V -> 150 V (zamiast MIN/MAX)", [
+            Step(send="VOLT:RANG 10", query="VOLT:RANG?", cmp="num_any"),
+            Step(send="VOLT:RANG 150", query="VOLT:RANG?", cmp="changed")], page=17, kind="probe",
+            note="FW V2.0.1 zwracał '1' dla MIN i MAX - może to numer zakresu, a MIN/MAX nie jest obsługiwane"),
         rw("VOLT_SLEW", "VOLTage:SLEW[:BOTH]", "VOLT:SLEW {}", "VOLT:SLEW?", SLEW, cmp="enum", page=17),
         rw("VOLT_SLEW_BOTH", "VOLTage:SLEW:BOTH - pełna forma", "VOLT:SLEW:BOTH {}", "VOLT:SLEW:BOTH?", ["SLOW", "NORM"],
            cmp="enum", page=17),
@@ -174,6 +187,9 @@ def build_catalog():
         TestCase("CURR_RANG", "", "CURRent:RANGe MIN/MAX", [
             Step(send="CURR:RANG MIN", query="CURR:RANG?", cmp="num_any"),
             Step(send="CURR:RANG MAX", query="CURR:RANG?", cmp="changed")], page=21),
+        TestCase("CURR_RANG_LOHI", "", "CURRent:RANGe liczbowo 3 A -> 40 A (zamiast MIN/MAX)", [
+            Step(send="CURR:RANG 3", query="CURR:RANG?", cmp="num_any"),
+            Step(send="CURR:RANG 40", query="CURR:RANG?", cmp="changed")], page=21, kind="probe"),
         rw("CURR_SLEW", "CURRent:SLEW[:BOTH] (A/µs)", "CURR:SLEW {}", "CURR:SLEW?", [1.0, 0.5], page=21),
         rw("CURR_SLEW_RISE", "CURRent:SLEW:RISE (A/µs)", "CURR:SLEW:RISE {}", "CURR:SLEW:RISE?", [1.0, 0.5], page=22),
         rw("CURR_SLEW_FALL", "CURRent:SLEW:FALL (A/µs)", "CURR:SLEW:FALL {}", "CURR:SLEW:FALL?", [0.5, 1.0], page=22),
@@ -214,7 +230,8 @@ def build_catalog():
     # ------------------------------------------------------------ 4.6 Dynamic
     G.append(Group("dyn", "4.6 Dynamika (DYNamic)", pre=["MODE DYN"], cases=[
         rw("DYN_HIGH", "DYNamic:HIGH[:LEVel]", "DYN:HIGH {}", "DYN:HIGH?", [10, 5], page=30),
-        rw("DYN_HIGH_DWEL", "DYNamic:HIGH:DWELl", "DYN:HIGH:DWEL {}", "DYN:HIGH:DWEL?", [0.01, 0.5], page=30),
+        rw("DYN_HIGH_DWEL", "DYNamic:HIGH:DWELl", "DYN:HIGH:DWEL {}", "DYN:HIGH:DWEL?", [0.5, 1.0], page=30,
+           note="v1.1: 0.01 z przykładu manuala było poniżej minimum urządzenia"),
         rw("DYN_LOW", "DYNamic:LOW[:LEVel]", "DYN:LOW {}", "DYN:LOW?", [1, 0.5], page=31),
         rw("DYN_LOW_DWEL", "DYNamic:LOW:DWELl", "DYN:LOW:DWEL {}", "DYN:LOW:DWEL?", [1, 0.2], page=31),
         rw("DYN_SLEW", "DYNamic:SLEW (A/µs)", "DYN:SLEW {}", "DYN:SLEW?", [1.0, 0.5], page=32),
@@ -224,18 +241,55 @@ def build_catalog():
         rw("DYN_MODE_LONG", "DYNamic:MODE - pełne nazwy", "DYN:MODE {}", "DYN:MODE?", ["PULSe", "CONTinuous"],
            cmp="enum", page=33),
         rw("DYN_HIGH_DEWL", "Literówka ze spisu treści: DYN:HIGH:DEWLl", "DYN:HIGH:DEWL {}", "DYN:HIGH:DWEL?",
-           [0.02], page=12, kind="probe"),
+           [0.7], page=12, kind="probe"),
+        TestCase("DYN_DWEL_MINQ", "", "DYN:HIGH:DWEL MIN - minimalny czas", [
+            Step(send="DYN:HIGH:DWEL MIN", query="DYN:HIGH:DWEL?", cmp="num_any")], page=30, kind="probe"),
+        rw("DYN_DWEL_SCAN", "Szukanie minimum DWEL: 0.2 / 0.1 / 0.05 / 0.02 s", "DYN:HIGH:DWEL {}", "DYN:HIGH:DWEL?",
+           [0.2, 0.1, 0.05, 0.02], page=30, kind="probe",
+           note="Pierwsza niezgodna wartość = poniżej minimum. Sprawdź na wyświetlaczu, czy jednostką są s czy ms"),
     ]))
 
     # ------------------------------------------------------------ 4.7 Battery
     G.append(Group("bat", "4.7 Test baterii (BATtery)", pre=["MODE BAT"], cases=[
         rw("BAT", "BATtery[:LEVel] - prąd rozładowania", "BAT {}", "BAT?", [2, 1.5], page=35),
-        rw("BAT_VST", "BATtery:VSTop - napięcie odcięcia", "BAT:VST {}", "BAT:VST?", [5, 10.5], page=35),
-        rw("BAT_CST", "BATtery:CSTop - pojemność stop", "BAT:CST {}", "BAT:CST?", [5, 2.5], page=36),
-        rw("BAT_TIM", "BATtery:TIMestop - czas stop", "BAT:TIM {}", "BAT:TIM?", [50, 120], page=36),
+        TestCase("BAT_VST", "", "BATtery:VSTop - napięcie odcięcia (przy VEN ON)", [
+            Step(send="BAT:VEN ON", cmp="none", note="FW V2.0.1: wartość stop zapisywalna tylko przy włączonym warunku"),
+            Step(send="BAT:VST 5", query="BAT:VST?", expect=5, cmp="num"),
+            Step(send="BAT:VST 10.5", query="BAT:VST?", expect=10.5, cmp="num"),
+            Step(send="BAT:VEN OFF", cmp="none")], page=35,
+            note="v1.1 bez VEN ON: zapis 5 V cicho zignorowany (odczyt 10.5)"),
         rw("BAT_VEN", "BATtery:VENabstop", "BAT:VEN {}", "BAT:VEN?", ["ON", "OFF"], cmp="bool", page=37),
         rw("BAT_CEN", "BATtery:CENabstop", "BAT:CEN {}", "BAT:CEN?", ["ON", "OFF"], cmp="bool", page=37),
         rw("BAT_TEN", "BATtery:TENabstop", "BAT:TEN {}", "BAT:TEN?", ["ON", "OFF"], cmp="bool", page=38),
+        TestCase("BAT_CST", "", "BATtery:CSTop - pojemność stop (przy CEN ON)", [
+            Step(send="BAT:CEN ON", cmp="none", note="v1.1: najpierw włącz warunek pojemności"),
+            Step(send="BAT:CST 5", query="BAT:CST?", expect=5, cmp="num"),
+            Step(send="BAT:CST 2.5", query="BAT:CST?", expect=2.5, cmp="num"),
+            Step(send="BAT:CEN OFF", cmp="none")], page=36,
+            note="FW V2.0.1 bez CEN ON: odczyt stał na 0.200"),
+        TestCase("BAT_TIM", "", "BATtery:TIMestop - czas stop (przy TEN ON)", [
+            Step(send="BAT:TEN ON", cmp="none", note="v1.1: najpierw włącz warunek czasu"),
+            Step(send="BAT:TIM 50", query="BAT:TIM?", expect=50, cmp="num"),
+            Step(send="BAT:TIM 120", query="BAT:TIM?", expect=120, cmp="num"),
+            Step(send="BAT:TEN OFF", cmp="none")], page=36,
+            note="FW V2.0.1 bez TEN ON: odczyt stał na 155000"),
+        TestCase("BAT_VST_RANGE", "", "BAT:VST MIN/MAX (przy VEN ON)", [
+            Step(send="BAT:VEN ON", cmp="none"),
+            Step(send="BAT:VST MIN", query="BAT:VST?", cmp="num_any"),
+            Step(send="BAT:VST MAX", query="BAT:VST?", cmp="changed"),
+            Step(send="BAT:VEN OFF", cmp="none")], page=35, kind="probe"),
+        TestCase("BAT_CST_RANGE", "", "BAT:CST MIN/MAX - zakres pojemności (przy CEN ON)", [
+            Step(send="BAT:CEN ON", cmp="none"),
+            Step(send="BAT:CST MIN", query="BAT:CST?", cmp="num_any"),
+            Step(send="BAT:CST MAX", query="BAT:CST?", cmp="changed"),
+            Step(send="BAT:CEN OFF", cmp="none")], page=36, kind="probe",
+            note="Pokazuje zakres i jednostkę (Ah czy mAh). v1.1 bez CEN ON: wartość stała 2.5"),
+        TestCase("BAT_TIM_RANGE", "", "BAT:TIM MIN/MAX - zakres czasu (przy TEN ON)", [
+            Step(send="BAT:TEN ON", cmp="none"),
+            Step(send="BAT:TIM MIN", query="BAT:TIM?", cmp="num_any"),
+            Step(send="BAT:TIM MAX", query="BAT:TIM?", cmp="changed"),
+            Step(send="BAT:TEN OFF", cmp="none")], page=36, kind="probe",
+            note="v1.1 bez TEN ON: wartość stała 120"),
         q("BAT_CAPA", "BATtery:CAPAcity? - zmierzona pojemność", "BAT:CAPA?", cmp="num_any", page=38),
         q("BAT_ENERGY", "BATtery:ENERGY? - zmierzona energia", "BAT:ENERGY?", cmp="num_any", page=39),
         q("BAT_TIME", "BATtery:TIME? - czas testu", "BAT:TIME?", cmp="num_any", page=39),
@@ -245,6 +299,24 @@ def build_catalog():
           kind="probe", note="Manual zapisuje prefiks niestandardowo ':[:SOURce]:BAT...'"),
     ]))
 
+    # ------------------------------------------------------------ 4.7b BAT w trakcie testu (INP 1)
+    G.append(Group("batrun", "4.7b Sonda: odczyty BAT w trakcie testu (INP 1)", pre=["MODE BAT"],
+                   needs_input_confirm=True, cases=[
+        TestCase("BAT_RUN", "", "BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME? przy uruchomionym teście baterii", [
+            Step(send="BAT 0.1", cmp="none", note="prąd 0.1 A"),
+            Step(send="BAT:VST 1", cmp="none", note="odcięcie 1 V - przy wolnych zaciskach test kończy się od razu"),
+            Step(send="BAT:VEN ON", cmp="none"),
+            Step(send="INP 1", wait_ms=1500, query="BAT:STAT?", expect=[0, 1, 2, 3], cmp="int_in"),
+            Step(query="BAT:ALL?", expect=5, cmp="fields"),
+            Step(query="BAT:CAPA?", cmp="num_any"),
+            Step(query="BAT:ENERGY?", cmp="num_any"),
+            Step(query="BAT:TIME?", cmp="num_any"),
+            Step(send="INP 0", query="BAT:STAT?", expect=[0, 1, 2, 3], cmp="int_in"),
+            Step(send="BAT:VEN OFF", cmp="none"),
+        ], page=38, kind="probe",
+            note="v1.0: wszystkie odczyty BAT zwracały ERR przy wyłączonym wejściu - sprawdzamy, czy działają w trakcie testu"),
+    ]))
+
     # ------------------------------------------------------------ 4.8 OCP
     G.append(Group("ocp", "4.8 Test OCP", pre=["MODE OCP"], cases=[
         rw("OCP_VON", "OCP:VON", "OCP:VON {}", "OCP:VON?", [5, 3], page=41),
@@ -252,6 +324,8 @@ def build_catalog():
         rw("OCP_ISET", "OCP:ISET", "OCP:ISET {}", "OCP:ISET?", [1, 2], page=41),
         rw("OCP_IST", "OCP:ISTep", "OCP:IST {}", "OCP:IST?", [0.5, 0.1], page=42),
         rw("OCP_IDEL", "OCP:IDELaystep (ms)", "OCP:IDEL {}", "OCP:IDEL?", [100, 200], page=42),
+        rw("OCP_IDEL_LONG", "OCP:IDELaystep - pełna nazwa", "OCP:IDELaystep {}", "OCP:IDELaystep?", [150],
+           page=42, kind="probe", note="v1.0: OCP:IDEL? zwracało pustą linię"),
         rw("OCP_VOCP", "OCP:VOCP", "OCP:VOCP {}", "OCP:VOCP?", [5, 4], page=43),
     ]))
 
@@ -263,6 +337,8 @@ def build_catalog():
         rw("OPP_PSET", "OPP:PSET", "OPP:PSET {}", "OPP:PSET?", [20, 30], page=45),
         rw("OPP_PST", "OPP:PSTep", "OPP:PST {}", "OPP:PST?", [5, 2], page=46),
         rw("OPP_IDEL", "OPP:IDELaystep (ms)", "OPP:IDEL {}", "OPP:IDEL?", [100, 200], page=46),
+        rw("OPP_IDEL_LONG", "OPP:IDELaystep - pełna nazwa", "OPP:IDELaystep {}", "OPP:IDELaystep?", [150],
+           page=46, kind="probe", note="v1.0: OPP:IDEL? zwracało ERR"),
         rw("OPP_VOPP", "OPP:VOPP", "OPP:VOPP {}", "OPP:VOPP?", [5, 4], page=47),
     ]))
 
@@ -289,8 +365,15 @@ def build_catalog():
     # ------------------------------------------------------------ Sondy - komendy spoza manuala
     G.append(Group("probe", "Sondy: komendy SCPI spoza manuala", default_on=False, cases=[
         q("P_ERR", "SYSTem:ERRor? - kolejka błędów", "SYST:ERR?", kind="probe",
-          note="Gdyby działało - dałoby pewniejszą weryfikację niż readback"),
-        q("P_OPC", "*OPC?", "*OPC?", kind="probe"),
+          note="FW V2.0.1 odpowiada '0x0000' - nieudokumentowane, ale istnieje"),
+        TestCase("P_ERR_QUEUE", "", "SYST:ERR? - czy rejestruje błędy?", [
+            Step(query="SYST:ERR?", cmp="any", note="stan wyjściowy"),
+            Step(send="FOO:BAR 1", query="SYST:ERR?", cmp="differs", note="po nieznanej komendzie kod powinien się zmienić"),
+            Step(query="SYST:ERR?", cmp="any", note="czy odczyt czyści błąd?"),
+            Step(send="CURR 999", query="SYST:ERR?", cmp="differs", note="wartość poza zakresem (OEL8512: 40 A)"),
+            Step(query="SYST:ERR?", cmp="any"),
+        ], kind="probe", note="FW V2.0.1: zawsze 0x0000 - kolejka nie rejestruje błędów"),
+        q("P_OPC", "*OPC?", "*OPC?", kind="probe", note="FW V2.0.1 zwraca ciąg wersji zamiast '1'"),
         q("P_ESR", "*ESR?", "*ESR?", kind="probe"),
         q("P_STB", "*STB?", "*STB?", kind="probe"),
         q("P_VERS", "SYSTem:VERSion?", "SYST:VERS?", kind="probe"),
@@ -304,7 +387,23 @@ def build_catalog():
             c.group = g.key
             if g.needs_input_confirm:
                 c.needs_input_confirm = True
+            if c.id in KNOWN_FW and c.kind == "doc":
+                c.known_issue, c.known_steps = KNOWN_FW[c.id]
     return G
+
+
+# Niezgodności potwierdzone na OEL8512 FW V2.0.1 (S/N 25160487), przebiegi 2026-10-20.
+# Te kroki dostają status 'ZNANY FW' zamiast FAIL - nowy FAIL = nowy problem (np. inny firmware).
+_BATQ = "zapytanie nieobsługiwane (ERR), także w trakcie testu baterii"
+KNOWN_FW = {
+    "MODE_ALL": ("MODE? po MODE BAT/OCP/OPP zwraca 'ocp'/'opp'/'continuous'", (6, 7, 8)),
+    "VOLT_RANG": ("VOLT:RANG? zawsze zwraca 1 (MIN/MAX i wartości liczbowe)", ()),
+    "CURR_RANG": ("CURR:RANG? zawsze zwraca 1 (MIN/MAX i wartości liczbowe)", ()),
+    "BAT_CAPA": (_BATQ, ()), "BAT_ENERGY": (_BATQ, ()), "BAT_TIME": (_BATQ, ()),
+    "BAT_STAT": (_BATQ, ()), "BAT_ALL": (_BATQ, ()),
+    "OCP_IDEL": ("OCP:IDEL? zwraca pustą linię - wartość sprawdzaj na wyświetlaczu", ()),
+    "OPP_IDEL": ("OPP:IDEL nieobsługiwane (ERR), także pełna nazwa IDELaystep", ()),
+}
 
 
 def all_cases(groups=None):

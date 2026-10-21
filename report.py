@@ -3,6 +3,7 @@ import csv
 import datetime as dt
 import os
 
+from config import APP_NAME, APP_VERSION
 from verifier import result_rows
 
 COLUMNS = [
@@ -30,6 +31,7 @@ def save_reports(results, folder, meta):
     lines = [
         "OEL85 Command Verifier - raport",
         "=" * 60,
+        f"Aplikacja:   {APP_NAME} {APP_VERSION}",
         f"Data:        {dt.datetime.now():%Y-%m-%d %H:%M:%S}",
         f"Urządzenie:  {meta.get('idn', '')}",
         f"Połączenie:  {meta.get('transport', '')} {meta.get('port', '')}",
@@ -41,7 +43,7 @@ def save_reports(results, folder, meta):
     for k in sorted(counts):
         lines.append(f"  {k:10s} {counts[k]}")
     lines += ["", "Testy niezaliczone / bez odpowiedzi:"]
-    bad = [r for r in results if r.status not in ("PASS", "INFO ✓", "INFO ✗", "SKIP")]
+    bad = [r for r in results if r.status not in ("PASS", "INFO ✓", "INFO ✗", "SKIP", "ZNANY FW")]
     if not bad:
         lines.append("  brak")
     for r in bad:
@@ -50,6 +52,12 @@ def save_reports(results, folder, meta):
             if st.status != "PASS":
                 lines.append(f"      krok {st.step_no}: TX '{st.sent}' Q '{st.query}' -> '{st.received}' "
                              f"(oczek. {st.expect}) {st.detail}")
+    lines += ["", "Znane niezgodności firmware (potwierdzone wcześniej, nie liczone jako nowe błędy):"]
+    known = [r for r in results if r.status == "ZNANY FW"]
+    if not known:
+        lines.append("  brak")
+    for r in known:
+        lines.append(f"  {r.case_id} - {r.note}")
     lines += ["", "Sondy (niejasności manuala / komendy nieudokumentowane):"]
     for r in results:
         if r.kind == "probe":
