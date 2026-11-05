@@ -1,74 +1,37 @@
-"""Hasła do paneli ENG i Admin (hash SHA-256 z solą, bez plaintextu w configu).
+# auth.py
+"""
+Hasła do panelu ENG (hash SHA-256 z solą — w config.json nie ma jawnego hasła).
 
 Poziomy:
-  eng   - Panel ENG; akceptuje hasło ENG albo Admin
-  admin - Panel Admin; akceptuje tylko hasło Admin
+  eng   — panel ENG; przyjmuje hasło ENG albo Admin
+  admin — zmiana haseł; tylko hasło Admin
+Domyślne (ustawiane przy pierwszym starcie): ENG = eng123, Admin = admin123.
 """
 import hashlib
 import hmac
-import logging
 
-log = logging.getLogger(__name__)
+LEVEL_NONE, LEVEL_ENG, LEVEL_ADMIN = 0, 1, 2
 
 
-def hash_password(password, salt):
+def hash_password(password: str, salt: str) -> str:
     return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
 
 
-def _match(cfg, password, key):
-    sec = cfg.security
-    return bool(sec.get(key)) and hmac.compare_digest(hash_password(password, sec["salt"]), sec[key])
+def check_level(cfg, password: str) -> int:
+    """Zwraca poziom dostępu dla hasła (LEVEL_ADMIN / LEVEL_ENG / LEVEL_NONE)."""
+    h = hash_password(password, cfg.PASSWORD_SALT)
+    if cfg.ADMIN_PASSWORD_HASH and hmac.compare_digest(h, cfg.ADMIN_PASSWORD_HASH):
+        return LEVEL_ADMIN
+    if cfg.ENG_PASSWORD_HASH and hmac.compare_digest(h, cfg.ENG_PASSWORD_HASH):
+        return LEVEL_ENG
+    return LEVEL_NONE
 
 
-def verify_password(cfg, password, level="eng"):
-    if level == "admin":
-        ok = _match(cfg, password, "admin_password_hash")
+def set_password(cfg, level: int, password: str) -> bool:
+    h = hash_password(password, cfg.PASSWORD_SALT)
+    if level == LEVEL_ADMIN:
+        cfg.ADMIN_PASSWORD_HASH = h
     else:
-        ok = _match(cfg, password, "eng_password_hash") or _match(cfg, password, "admin_password_hash")
-    log.info("Logowanie %s: %s", level.upper(), "OK" if ok else "BŁĘDNE HASŁO")
-    return ok
-
-
-def set_password(cfg, level, password):
-    key = "admin_password_hash" if level == "admin" else "eng_password_hash"
-    cfg.security[key] = hash_password(password, cfg.security["salt"])
-    cfg.save()
-    log.warning("ZMIANA HASŁA %s", level.upper())
-
-
-def ask_password(parent, cfg, title="Logowanie", level="eng"):
-    """Modalne okno hasła. Zwraca True jeśli hasło poprawne dla danego poziomu."""
-    import tkinter as tk
-    from tkinter import ttk, messagebox
-
-    result = {"ok": False}
-    dlg = tk.Toplevel(parent)
-    dlg.title(title)
-    dlg.resizable(False, False)
-    dlg.transient(parent)
-
-    frm = ttk.Frame(dlg, padding=14)
-    frm.pack(fill="both", expand=True)
-    ttk.Label(frm, text=f"Hasło {'Admin' if level == 'admin' else 'ENG'}:").grid(row=0, column=0, sticky="w")
-    var = tk.StringVar()
-    ent = ttk.Entry(frm, textvariable=var, show="•", width=24)
-    ent.grid(row=0, column=1, padx=(8, 0))
-    ent.focus_set()
-
-    def ok(_=None):
-        if verify_password(cfg, var.get(), level):
-            result["ok"] = True
-            dlg.destroy()
-        else:
-            messagebox.showerror("Błąd", "Nieprawidłowe hasło", parent=dlg)
-            var.set("")
-
-    btns = ttk.Frame(frm)
-    btns.grid(row=1, column=0, columnspan=2, pady=(12, 0), sticky="e")
-    ttk.Button(btns, text="OK", command=ok).pack(side="left", padx=4)
-    ttk.Button(btns, text="Anuluj", command=dlg.destroy).pack(side="left")
-    dlg.bind("<Return>", ok)
-    dlg.bind("<Escape>", lambda e: dlg.destroy())
-    dlg.grab_set()
-    parent.wait_window(dlg)
-    return result["ok"]
+        cfg.ENG_PASSWORD_HASH = h
+    print(f"[AUTH] Zmiana hasła {'ADMIN' if level == LEVEL_ADMIN else 'ENG'}")
+    return cfg.save()

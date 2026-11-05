@@ -1,0 +1,383 @@
+{
+  "PSU-000003-00": {
+    "name": "PSU-000003-00",
+    "identifier": "",
+    "description": "ER115 - Power Supply Unit - External (ER115)",
+    "enabled": true,
+    "serial_length": [
+      10
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.3,
+      "ramp_time": 0.0,
+      "test_time": 1.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.0,
+      "i_max": 2.0,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000005-00": {
+    "name": "PSU-000005-00",
+    "identifier": "",
+    "description": "SP171-Delta PSU (ES240UK/IT)",
+    "enabled": true,
+    "serial_length": [
+      12
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3300,
+      "voltage_tolerance": 50,
+      "current_limit_high": 10.0,
+      "current_limit_low": 0.01,
+      "ramp_time": 0.1,
+      "test_time": 3.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 10.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.25,
+      "v_min": 11.65,
+      "v_max": 12.85,
+      "i_min": 0.0,
+      "i_max": 3.7,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000006-00": {
+    "name": "PSU-000006-00",
+    "identifier": "",
+    "description": "SP210-UK-K - PSU black 17W (SR203UK)",
+    "enabled": true,
+    "serial_length": [
+      9,
+      10
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.3,
+      "ramp_time": 0.0,
+      "test_time": 1.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.0,
+      "i_max": 1.42,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000007-00": {
+    "name": "PSU-000007-00",
+    "identifier": "",
+    "description": "SP210-UK-K - PSU white 17W (SE210UK)",
+    "enabled": true,
+    "serial_length": [
+      9,
+      10
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.3,
+      "ramp_time": 0.0,
+      "test_time": 1.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.0,
+      "i_max": 1.42,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000008-00": {
+    "name": "PSU-000008-00",
+    "identifier": "",
+    "description": "SP210EU-K Ext PSU IP Box REF HUB 4 (SR203IT)",
+    "enabled": true,
+    "serial_length": [
+      10
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.3,
+      "ramp_time": 0.0,
+      "test_time": 1.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.0,
+      "i_max": 1.42,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000013-00": {
+    "name": "PSU-000013-00",
+    "identifier": "",
+    "description": "SPA0506EU-K IP061 EU PSU (IP061DE/IT)",
+    "enabled": true,
+    "serial_length": [
+      10,
+      21
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.15,
+      "ramp_time": 0.5,
+      "test_time": 1.0,
+      "fall_time": 0.5,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 5.0,
+      "v_min": 4.5,
+      "v_max": 5.5,
+      "i_min": 0.0,
+      "i_max": 1.12,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000016-00": {
+    "name": "PSU-000016-00",
+    "identifier": "",
+    "description": "SSW-3344UK IP061 UK PSU (IP061UK)",
+    "enabled": true,
+    "serial_length": [
+      10,
+      21
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.15,
+      "ramp_time": 0.5,
+      "test_time": 1.0,
+      "fall_time": 0.5,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 5.0,
+      "v_min": 4.5,
+      "v_max": 5.5,
+      "i_min": 0.0,
+      "i_max": 1.12,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000033-00": {
+    "name": "PSU-000033-00",
+    "identifier": "",
+    "description": "GPA075-01-G-SKY (IP061 Dhruv PSU)",
+    "enabled": true,
+    "serial_length": [
+      21
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3000,
+      "voltage_tolerance": 50,
+      "current_limit_high": 2.5,
+      "current_limit_low": 0.15,
+      "ramp_time": 0.5,
+      "test_time": 1.0,
+      "fall_time": 0.5,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 5.0,
+      "v_min": 4.75,
+      "v_max": 5.25,
+      "i_min": 0.0,
+      "i_max": 1.5,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "PSU-000049-00": {
+    "name": "PSU-000049-00",
+    "identifier": "",
+    "description": "SPA360-21-C-SKY-gry (SR213 Depop)",
+    "enabled": true,
+    "serial_length": [
+      10,
+      21
+    ],
+    "test_params": {
+      "mode": "DC",
+      "voltage": 4242,
+      "voltage_tolerance": 50,
+      "current_limit_high": 3.5,
+      "current_limit_low": 0.0,
+      "ramp_time": 0.0,
+      "test_time": 1.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.0,
+      "i_max": 3.0,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "MPD-PW00476AA": {
+    "name": "MPD-PW00476AA",
+    "identifier": "",
+    "description": "Adapter External 12V PSU (DPS5002NS)",
+    "enabled": true,
+    "serial_length": [
+      22
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3750,
+      "voltage_tolerance": 50,
+      "current_limit_high": 10.0,
+      "current_limit_low": 0.23,
+      "ramp_time": 0.0,
+      "test_time": 3.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.2,
+      "i_max": 3.33,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  },
+  "01403-00516": {
+    "name": "01403-00516",
+    "identifier": "",
+    "description": "Power Adapter NB1233EIC81A_T (ESD-160S/C ESI-160)",
+    "enabled": true,
+    "serial_length": [
+      17,
+      18,
+      19
+    ],
+    "test_params": {
+      "mode": "AC",
+      "voltage": 3750,
+      "voltage_tolerance": 50,
+      "current_limit_high": 10.0,
+      "current_limit_low": 0.23,
+      "ramp_time": 0.0,
+      "test_time": 3.0,
+      "fall_time": 0.0,
+      "frequency": 50,
+      "arc_detection": 0.0
+    },
+    "load_params": {
+      "enabled": true,
+      "v_nominal": 12.0,
+      "v_min": 11.4,
+      "v_max": 12.6,
+      "i_min": 0.2,
+      "i_max": 3.33,
+      "power_on_delay": 2.0,
+      "settle_time": 1.0,
+      "samples": 5,
+      "i_tol_pct": 3.0,
+      "i_tol_abs": 0.02
+    }
+  }
+}

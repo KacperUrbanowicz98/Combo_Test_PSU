@@ -1,133 +1,124 @@
-# OEL85 Command Verifier
+# Reconext Combo Test PSU 1.0.0
 
-Narzędzie do sprawdzenia, które komendy SCPI z **OEL85 Programming Manual V1.0.2 (01.2025)** faktycznie działają na obciążeniu **OWON OEL8512** — przed integracją obciążenia ze stanowiskiem Hi-Pot.
-Zasada testu: **zapis → odczyt zwrotny → porównanie**. Manual nie dokumentuje kolejki błędów (`SYST:ERR?`), więc odczyt zwrotny jest jedyną pewną metodą weryfikacji.
-
-Testy działają **bez niczego podłączonego do zacisków** obciążenia. Wymagane jest tylko połączenie OEL ↔ PC (RS232 albo USB).
+Stanowisko testowe zasilaczy: **Hi-Pot (Chroma 19052) + test obciążenia (OWON OEL8512)** w jednym cyklu,
+z przełączaniem toru przez przekaźniki sterowane z Arduino/STM.
+Bazą jest Hi-Pot PSU 1.1.2 (wygląd, logika Chromy, interlock, raporty IFS, statystyki).
+Sterowanie OEL8512 wg baseline **OEL85 Verifier 1.2.4** (`oel85.py`, `transport.py`, `simulator.py`
+skopiowane bez zmian — sumy SHA-256 zgodne z `BASELINE_OEL8512_FW201.md`).
 
 ## Uruchomienie
 
 ```
-pip install -r requirements.txt
-python main.py                 # GUI
-python main.py --sim           # GUI z symulatorem (bez urządzenia)
-python main.py --cli --sim     # konsola, symulator
-python main.py --cli --port COM5 --baud 115200 --probes -v
-python create_exe.py           # -> dist/OEL85_Verifier.exe
+pip install pyserial
+python main.py          # sprzęt
+python main.py --sim    # symulacja Chromy, OEL8512 i Arduino/STM
+python create_exe.py    # -> dist/Combo Test PSU/  (kopiować cały folder)
 ```
 
-## Pliki (płaska struktura)
+Bez logowania HRID — w statystykach i nazwach katalogów zmian jest **nazwa stanowiska**
+(ENG → Ogólne; domyślnie nazwa komputera).
 
-| Plik | Rola |
-|---|---|
-| `main.py` | start GUI / tryb CLI, logowanie do `oel85_verifier.log` |
-| `gui.py` | okno główne: połączenie, lista testów, wyniki, log TX/RX |
-| `eng_panel.py` | **Panel ENG**: konsola SCPI + sekwencje, sterowanie ręczne, pomiar na żywo, diagnostyka łącza (wykrywanie baudrate, terminatora, opóźnienie) |
-| `admin_panel.py` | **Panel Admin**: parametry łącza, tolerancje, opcje testu, zmiana hasła (zmiany logowane) |
-| `auth.py` | hasło ENG/Admin (hash SHA-256, nie plaintext) |
-| `command_catalog.py` | katalog testów — wszystkie komendy z manuala + sondy niejasności |
-| `verifier.py` | silnik testu (wątek roboczy, STOP, bezpieczne wyłączenie na końcu) |
-| `oel85.py` | **driver OEL85** — API do reużycia w docelowym stanowisku Hi-Pot + obciążenie |
-| `transport.py` | RS232/USB-COM (pyserial), VISA (opcjonalnie), symulator |
-| `simulator.py` | symulator OEL8512 do testu aplikacji bez sprzętu |
-| `report.py` | raport CSV (Excel PL, `;`) + podsumowanie TXT do `reports/` |
-| `config.py` | `config.json` obok exe |
-| `create_exe.py` | budowa exe (PyInstaller) |
+## Przebieg testu
 
-## Hasła (domyślne — zmień w Panelu Admin → „Zmiana haseł”)
+1. Wybór profilu z listy (tylko aktywne profile) → potwierdzenie parametrów → skan SN (walidacja długości).
+2. Ekran testu: łączenie w tle z Chromą (konfiguracja kroku + odczyt zwrotny), OEL8512 i Arduino/STM.
+3. START (przycisk albo zamknięcie klapy):
+   1. `PATH HIPOT` — przekaźniki, Arduino/STM musi odpowiedzieć `OK PATH HIPOT`,
+   2. **Hi-Pot** — logika z Hi-Pot PSU 1.1.2 (`result_validator.py`: PASS z Chromy tylko z dowodem
+      wykonania testu, napięcie i prąd w limitach). Raport Hi-Pot zapisywany od razu,
+   3. `PATH OFF`. Hi-Pot **FAIL → koniec**, obciążenie pominięte (zasilacz z FAIL nie dostaje 230 V),
+   4. `PATH LOAD` — 230 V na zasilacz, wyjście na OEL8512,
+   5. **Obciążenie, 2 punkty CC**: MIN (`i_min`; 0 A = pomiar bez obciążenia, wejście OEL wyłączone)
+      i MAX (`i_max`). Po każdym punkcie średnia z `samples` odczytów. PASS punktu: `v_min ≤ V ≤ v_max`,
+      prąd pobierany zgodny z nastawą (tolerancja `i_tol_pct` / `i_tol_abs`), brak zadziałania OVP/OCP/OPP,
+   6. `PATH OFF`, wejście OEL OFF — zawsze, także po STOP / otwarciu klapy / błędzie.
+4. Wynik całkowity: PASS tylko gdy oba testy PASS. NIEWAŻNY (brak komunikacji, brak potwierdzenia
+   przekaźników, błąd konfiguracji OEL) i PRZERWANY nie są liczone w statystykach.
 
-| Panel | Hasło domyślne | Uwagi |
+Konfiguracja OEL przed **każdym** testem: `INP 0`, `MODE CURR` (+ `MODE?`), `VOLT:PROT`, `CURR:PROT`,
+`POW:PROT`, `VOLT:ON`, `CURR` — każdy zapis sprawdzany: `ERR` po komendzie + odczyt zwrotny.
+Zabezpieczenia wyliczane z profilu (`load_tester.protection_levels`): OVP = 1.2·Vmax + 1 V,
+OCP = 1.25·Imax + 0.2 A, OPP = 1.3·Vmax·Imax + 2 W, Von = 0.5·Vmin. Bez `*RST` w cyklu.
+
+## Widok ekranu testu (ENG → Ogólne)
+
+* **oba testy na ekranie** — panele HI-POT i OBCIĄŻENIE obok siebie,
+* **jeden po drugim** — widoczny tylko aktywny test, nad nim „Krok 1/2 … 2/2”, na końcu podsumowanie.
+
+Na ekranie: aktualny SN, status połączeń (Chroma / OEL8512 / Arduino/STM), aktywny tor przekaźników,
+stan klapy, pomiary na żywo, historia 5 ostatnich wyników (Hi-Pot / obciążenie / wynik), licznik zmiany.
+
+## Raporty (osobny plik na test)
+
+| Test | Plik | Katalog (ENG → Logi) |
 |---|---|---|
-| ENG | `eng123` | konsola SCPI, sterowanie, pomiar, diagnostyka |
-| Admin | `admin123` | ustawienia + zmiana obu haseł; hasło Admin otwiera też panel ENG |
+| Hi-Pot | `SN_RRRRMMDDggmmss.txt`, format Chroma 19052 **bez zmian** | `log_dir` (IFS) |
+| Obciążenie | `SN_RRRRMMDDggmmss_LOAD.txt` | `load_log_dir` (domyślnie osobny, żeby IFS go nie pobierał) |
+| Test w pętli ENG | `loop_<PN>_<data>.csv` | `eng_log_dir` |
 
-Hasła są zapisane w `config.json` jako hash SHA-256 z solą. Przy aktualizacji z v1.0 dotychczasowe wspólne hasło staje się hasłem ENG, a hasło Admin dostaje wartość domyślną.
+Przy błędzie zapisu — kopia w `logs_awaryjne` obok aplikacji i komunikat dla operatora.
 
-## Pierwsze połączenie z prawdziwym OEL
+## Panel ENG
 
-1. Manual **nie podaje parametrów RS232**. Domyślnie 115200 8N1, terminator `\n`. Jeśli `*IDN?` nie odpowiada: rozłącz → Panel ENG → *Diagnostyka łącza* → **Wykryj baudrate**.
-2. Port USB: jeśli zgłasza się jako wirtualny COM — interfejs „RS232 / USB-COM”. Jeśli jako USBTMC — zainstaluj `pyvisa pyvisa-py` i wybierz „VISA”, w polu port wpisz zasób (np. `USB0::0x5345::...::INSTR`).
-3. Po wyborze portu zapamiętywany jest też jego **VID:PID**, więc zmiana numeru COM nie psuje konfiguracji.
+Wejście: **Ctrl+Alt+D ×3** albo „⚙ Panel ENG” w stopce ekranu wyboru profilu.
 
-## Wyniki
-
-| Status | Znaczenie |
+| Hasło domyślne | Dostęp |
 |---|---|
-| PASS | odczyt zgodny z zapisaną wartością |
-| FAIL | odpowiedź inna niż oczekiwana (wartość/format) |
-| NO RESP | brak odpowiedzi na zapytanie w czasie timeoutu |
-| ODRZUCONA | urządzenie odpowiedziało `ERR` (na zapytanie albo zaraz po zapisie) |
-| ZNANY FW | niezgodność już potwierdzona na OEL8512 FW V2.0.1 — nie liczy się jako nowy błąd (lista w `command_catalog.KNOWN_FW`) |
-| ERROR | wyjątek / błąd komunikacji |
-| INFO ✓ / ✗ | **sonda** — sprawdzenie niejasności manuala lub komendy spoza manuala; nie wpływa na wynik |
+| ENG: `eng123` | wszystkie zakładki poza „Hasła” |
+| Admin: `admin123` | wszystko + zmiana haseł |
 
-Każdy przebieg zapisuje automatycznie `reports/OEL85_verify_<data>.csv` + `.txt`.
+Hasła w `config.json` jako SHA-256 z solą. **Zmień je po pierwszym uruchomieniu.**
 
-## Bezpieczeństwo
+Zakładki: Chroma Hi-Pot · OEL8512 (test `*IDN?`, odczyt V/I, wejście OFF) · Arduino/STM (stan klapy,
+ręczne przełączanie torów z potwierdzeniem) · Profile (włącz/wyłącz, dodaj, edytuj, duplikuj, usuń,
+**test w pętli**) · Logi · Ogólne · Hasła. Zmiany konfiguracji i profili są logowane na konsolę
+(`[ENG] Zmiana konfiguracji: …`).
 
-- Na starcie i na końcu testu (także po STOP / błędzie) wysyłane jest `INP:SHOR 0`, `INP 0`, `SYST:SENS 0`.
-- Grupa *4.1 Wejście* (INP 1 / INP:SHOR 1) wymaga potwierdzenia: zaciski wolne, Hi-Pot wyłączony.
-- Panel ENG ma stały przycisk **WEJŚCIE OFF (INP 0)** działający także w trakcie testu.
+**Test w pętli**: pełna sekwencja N razy na jednej sztuce (np. złoty wzorzec), klapa zamknięta przez
+cały czas, otwarcie przerywa. Tabela cykli + min/śr/max (Im Hi-Pot, V@MIN, V@MAX), zapis do CSV.
+Nie trafia do IFS ani do statystyk zmiany.
 
-## Niejasności manuala sprawdzane sondami
+## Profile (`models.py` / `models.json`)
 
-- `SYST:REM?` / `SYST:LOC?` w przykładach, choć to komendy bez zapytania.
-- `VOLT:SLEW RISE FAST` (spacja zamiast `:`) w przykładzie.
-- `MODE`: lista parametrów zawiera OVP, opis mówi OPP; `MODE?` nie wymienia `battery`.
-- `CURR:SLEW:FALL`: parametr opisany jako FAST/NORM/SLOW i jednocześnie A/µs.
-- `CURR:PROT:DEL`, `POW:PROT:DEL` — wspomniane, nieopisane.
-- `DYN:HIGH:DEWLl` — literówka w spisie treści.
-- Prefiks `:[:SOURce]:BATtery…` zapisany niestandardowo.
-- Sondy spoza manuala (grupa domyślnie wyłączona): `SYST:ERR?`, `*OPC?`, `*ESR?`, `*STB?`, `SYST:VERS?`, `*CLS`, nieistniejąca komenda.
+11 PN występujących i w profilach Hi-Pot, i w tabelach obciążenia. Format PN: `PSU-000006-00`
+(stare `PSU-00006-00` z Hi-Pot PSU są automatycznie migrowane). Profile bez danych obciążenia
+(`PSU-000019-00`, `01403-00307`, `01403-00244`) i bez profilu Hi-Pot (`PSU-000050-00`) pominięte.
 
-Wartości testowe dobrane dla OEL8512 (150 V / 40 A / 400 W). Symulator nie jest wzorcem zachowania prawdziwego urządzenia — dopiero przebieg na OEL pokaże faktyczny stan komend.
+| PN | Hi-Pot | Okno V | MIN / MAX |
+|---|---|---|---|
+| PSU-000003-00 | AC 3000 V, 0.3–2.5 mA, 1 s | 11.4–12.6 V | 0 / 2.0 A |
+| PSU-000005-00 | AC 3300 V, 0.01–10 mA, 3 s | 11.65–12.85 V | 0 / 3.7 A |
+| PSU-000006-00 | AC 3000 V, 0.3–2.5 mA, 1 s | 11.4–12.6 V | 0 / 1.42 A |
+| PSU-000007-00 | AC 3000 V, 0.3–2.5 mA, 1 s | 11.4–12.6 V | 0 / 1.42 A |
+| PSU-000008-00 | AC 3000 V, 0.3–2.5 mA, 1 s | 11.4–12.6 V | 0 / 1.42 A |
+| PSU-000013-00 | AC 3000 V, 0.15–2.5 mA, 1 s | 4.50–5.50 V | 0 / 1.12 A |
+| PSU-000016-00 | AC 3000 V, 0.15–2.5 mA, 1 s | 4.50–5.50 V | 0 / 1.12 A |
+| PSU-000033-00 | AC 3000 V, 0.15–2.5 mA, 1 s | 4.75–5.25 V | 0 / 1.5 A |
+| PSU-000049-00 | DC 4242 V, 0–3.5 mA, 1 s | 11.4–12.6 V | 0 / 3.0 A |
+| MPD-PW00476AA | AC 3750 V, 0.23–10 mA, 3 s | 11.4–12.6 V | 0.2 / 3.33 A |
+| 01403-00516 | AC 3750 V, 0.23–10 mA, 3 s | 11.4–12.6 V | 0.2 / 3.33 A |
 
-## Zmiany w v1.1 (po pierwszym teście na OEL8512, FW V2.0.1)
+Czasy domyślne obciążenia: załączenie 2 s, ustalanie 1 s/punkt, 5 próbek, tolerancja prądu 3 % / 20 mA.
 
-- Odpowiedź `ERR` ma osobny status **ODRZUCONA**. Po każdym zapisie aplikacja nasłuchuje przez czas „przerwy po komendzie”, czy urządzenie nie odesłało `ERR` — wtedy zapis też jest oznaczany jako odrzucony.
-- Puste linie w odpowiedzi są pomijane (czekamy na właściwą wartość); jeśli przyszła tylko pusta linia — status FAIL „Pusta linia” + HEX w logu.
-- `*RST`: pauza `rst_wait_ms` (domyślnie 2000 ms) i ponowne `SYST:REM`.
-- Panel ENG → konsola: podgląd **HEX** surowych bajtów odpowiedzi, szybki przycisk `SYST:SENS?`.
-- `DYN:HIGH:DWEL`: wartości testowe 0.5 / 1.0 s (0.01 z manuala było poniżej minimum) + sondy MIN i skan minimum.
-- `BAT:CST` / `BAT:TIM` testowane po włączeniu `BAT:CEN ON` / `BAT:TEN ON` + sondy zakresu MIN/MAX.
-- Nowa grupa **4.7b** (wymaga potwierdzenia wolnych zacisków): odczyty `BAT:STAT?/ALL?/CAPA?/ENERGY?/TIME?` w trakcie uruchomionego testu baterii.
-- Sondy `VOLT:RANG` / `CURR:RANG` z wartościami liczbowymi (MIN/MAX zwracało `1`).
-- Sondy pełnych nazw `OCP:IDELaystep` / `OPP:IDELaystep`.
-- Osobne hasła ENG i Admin.
-- CLI na prawdziwym urządzeniu pyta o wolne zaciski przed testami INP (pominięcie: `--yes`).
+## Arduino/STM — protokół (`interlock.py`, `fixture_controller.ino`)
 
-## Zmiany w v1.2 (po drugim przebiegu)
+9600 8N1, linie z `\n`. Arduino → PC co ≤1 s: `OPEN` / `CLOSED` (jak w Hi-Pot PSU).
+PC → Arduino: `PATH OFF|HIPOT|LOAD`, `PATH?` (keepalive co 1 s, gdy tor ≠ OFF).
+Odpowiedzi: `OK PATH <tor>`, `ERR LID_OPEN`, `ERR BAD_PATH`, `PATH <tor>`.
+Wymagania po stronie Arduino/STM: break-before-make, tory tylko przy zamkniętej klapie, otwarcie klapy =
+natychmiast OFF, watchdog 5 s bez komend = OFF. `fixture_controller.ino` to **szkic referencyjny** —
+piny i poziomy przekaźników do potwierdzenia ze schematem (Arduino IDE wymaga, żeby szkic leżał
+w folderze o tej samej nazwie).
 
-- `*RST` restartuje OEL8512 (na UART pojawia się bajt 0x00). Aplikacja odrzuca bajty 0x00 i po `*RST` czeka, aż urządzenie znów odpowie na `*IDN?` (max `rst_wait_ms` = 10 s), potem `SYST:REM`. Driver: `OEL85.reset()` robi to samo.
-- `BAT:VST` testowane przy `BAT:VEN ON` (bez tego zapis jest cicho ignorowany), sondy zakresu MIN/MAX przy włączonych warunkach.
-- Status **ZNANY FW** dla potwierdzonych niezgodności — raport pokazuje je osobno, więc nowy FAIL = nowy problem.
-- Sonda `P_ERR_QUEUE`: czy nieudokumentowane `SYST:ERR?` rejestruje błędy (nieznana komenda, wartość poza zakresem).
+## Symulacja (`--sim`)
 
-## OEL8512 FW V2.0.1 — co ustaliliśmy
+Końcówka SN wymusza usterkę: `…HF` Hi-Pot FAIL, `…LV` za niskie napięcie, `…LI` zasilacz nie daje prądu,
+`…RF` brak potwierdzenia przekaźników. Przycisk „SIM: klapa” otwiera/zamyka klapę.
 
-| Obszar | Wynik |
-|---|---|
-| CC/CV/CR/CP, INP/SHORT, OVP/OCP/OPP, Von, slew, DYN, OCP/OPP (bez IDEL), MEAS, PAR | działa zgodnie z manualem |
-| Odrzucony zapis | urządzenie wysyła `ERR` zaraz po komendzie (np. `CURR:SLEW:FALL FAST`, `DYN:HIGH:DWEL 0.05`) |
-| Zapis cicho ignorowany | `BAT:VST/CST/TIM` przy wyłączonym `BAT:VEN/CEN/TEN` — bez `ERR`, tylko readback to wykryje |
-| `*RST` | restart urządzenia, kilka sekund bez odpowiedzi |
-| `MODE?` | po BAT/OCP/OPP zwraca `ocp` / `opp` / `continuous` |
-| `OCP:IDEL?` | pusta linia |
-| Zaraz po `*RST` | `*IDN?` odpowiada wcześniej niż reszta; `SYST:SENS?` dawało pustą linię, `CURR?` milczało — po pełnym starcie działają |
-| `VOLT:RANG?`, `CURR:RANG?` | zawsze `1` |
-| `BAT:CAPA?/ENERGY?/TIME?/STAT?/ALL?`, `OPP:IDEL` | `ERR` (także w trakcie testu baterii) |
-| `DYN:HIGH:DWEL` | minimum 0.1 s |
-| Spoza manuala | `SYST:ERR?` → zawsze `0x0000` (nie rejestruje błędów), `SYST:VERS?` → `V2.0.1`, `*OPC?` → ciąg wersji, `*ESR?`/`*STB?` → `N/A` |
-| Zakresy BAT | `VST` 0–150 V, `CST` 0–999.999 Ah, `TIM` 0–999999 s |
-| Weryfikacja zapisu w stanowisku | `ERR` po komendzie + readback (SYST:ERR? bezużyteczne) |
+## Do potwierdzenia / otwarte
 
-## Zmiany w v1.2.1
-
-- Po `*RST` czekamy najpierw na `*IDN?`, potem na `MODE?` (część sterująca startuje później), dopiero wtedy `SYST:REM`.
-- `SYST:SENS` usunięte z listy ZNANY FW — działa; pusta linia była skutkiem testu tuż po restarcie.
-
-## Zmiany w v1.2.3
-
-- Raport v1.2.2 pokazał, że po `*RST` urządzenie odpowiada na `*IDN?` i na jedno `MODE?`, a potem jeszcze przez chwilę milczy albo zwraca puste linie. Teraz po `*RST` wymagane są **3 kolejne poprawne rundy `MODE?` + `CURR?`** (max `rst_wait_ms` = 20 s). Czas do ustabilizowania jest zapisywany w raporcie przy kroku `*RST`.
-- Ta sama logika w driverze: `oel85.wait_stable_after_reset()` / `OEL85.reset()`.
-- Zalecenie dla stanowiska: nie używać `*RST` w cyklu testu — ustawiać komplet parametrów jawnie.
+* `MPD-PW00476AA`, `01403-00516`: w tabeli 3.33 A i 45 W (12 V × 3.33 A = 40 W) — w profilu 3.33 A.
+* `PSU-000005-00`: „Max = -12.85 V” w tabeli potraktowane jako 12.85 V.
+* Wariant widoku (oba testy / jeden po drugim) — do wyboru po testach na żywo.
+* Skrypt testowy dla High Runnera — odłożony.
+* Przekaźniki/szkic Arduino — do weryfikacji na sprzęcie przed pierwszym HV.

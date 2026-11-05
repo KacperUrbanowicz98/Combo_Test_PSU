@@ -1,0 +1,18 @@
+Combo Test PSU — v1.0.0 (pierwsza wersja)
+
+Baza: Hi-Pot PSU 1.1.2 + OEL85 Verifier 1.2.4 (baseline OEL8512 FW V2.0.1)
+
+- Jedna sekwencja: Hi-Pot -> przekaźniki (Arduino/STM) -> test obciążenia 2-punktowy na OEL8512.
+- Usunięte logowanie HRID (operators.json, lista HRID w config.py) — w statystykach nazwa stanowiska.
+- models.py: wspólne profile Hi-Pot + obciążenie (11 PN), PN w formacie PSU-000006-00
+  (migracja starych kluczy PSU-00006-00), profile włączane/wyłączane.
+- interlock.py: dodane sterowanie torem PATH OFF/HIPOT/LOAD z potwierdzeniem i keepalive.
+- Nowe moduły: hipot_runner.py (logika Hi-Pot wydzielona z test_screen.py), load_tester.py,
+  combo_sequence.py, simulators.py, stats_window.py, eng_panel.py, auth.py.
+- oel85.py, transport.py, simulator.py — bez zmian (baseline 1.2.4).
+- logger.py: raport Hi-Pot bez zmian (IFS) + osobny raport obciążenia SN_..._LOAD.txt.
+- Ekran testu: dwa warianty widoku, status połączeń Chroma / OEL8512 / Arduino/STM, aktywny tor,
+  historia 5 wyników z wynikiem Hi-Pot, obciążenia i całkowitym, przycisk „Połącz ponownie”.
+- Panel ENG zamiast panelu administratora: konfiguracja trzech połączeń, baza profili z testem
+  w pętli, ścieżki logów, wariant widoku, hasła ENG/Admin (hash zamiast hasła w kodzie).
+- fixture_controller.ino: szkic referencyjny Arduino/STM (protokół PATH, watchdog, break-before-make).

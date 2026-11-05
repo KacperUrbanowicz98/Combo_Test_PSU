@@ -1,148 +1,126 @@
-"""Konfiguracja aplikacji OEL85 Verifier (config.json obok exe/skryptu)."""
-import json
+# config.py
+"""Konfiguracja aplikacji Combo Test PSU (Hi-Pot Chroma 19052 + obciążenie OEL8512)."""
 import os
-import sys
-import copy
-import logging
+import socket
 
-log = logging.getLogger(__name__)
+from app_paths import app_dir
 
-APP_NAME = "OEL85 Command Verifier"
-APP_VERSION = "1.2.4"
+APP_NAME = "Combo Test PSU"
+APP_VERSION = "1.0.0"
 
 
-def app_dir():
-    """Folder aplikacji - obok .exe (PyInstaller) albo obok skryptu."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
-
-CONFIG_PATH = os.path.join(app_dir(), "config.json")
-CONFIG_SCHEMA = 2   # podbijać przy zmianach wymagających migracji starego config.json
-
-DEFAULTS = {
-    "connection": {
-        "transport": "serial",          # serial | visa | sim
-        "port": "",                     # np. COM5
-        "port_vid_pid": "",             # np. 1A86:7523 - auto-wybór portu po VID:PID
-        "baudrate": 115200,
-        "bytesize": 8,
-        "parity": "N",
-        "stopbits": 1,
-        "timeout_s": 1.0,               # timeout odczytu odpowiedzi
-        "tx_terminator": "\\n",         # zapisane jako escape, patrz decode_term()
-        "rx_terminator": "\\n",
-        "inter_cmd_delay_ms": 60,       # przerwa po każdej komendzie zapisu (w tym czasie nasłuch na ERR)
-        "visa_resource": "",
-    },
-    "test": {
-        "num_abs_tol": 0.0011,          # tolerancja bezwzględna porównania liczb
-        "num_rel_tol": 0.002,           # tolerancja względna
-        "retries_on_timeout": 1,        # ponowienie zapytania po braku odpowiedzi
-        "rst_wait_ms": 20000,           # max czas czekania na stabilną komunikację po *RST
-        "remote_before_test": True,     # SYST:REM na starcie
-        "local_after_test": True,       # SYST:LOC na końcu
-        "rst_after_test": False,        # *RST na końcu
-        "require_input_confirm": True,  # potwierdzenie wolnych zacisków przed testami INP
-        "reports_dir": "reports",
-    },
-    "security": {
-        # sha256(salt + hasło). Domyślne: ENG = eng123, Admin = admin123 -> ZMIEŃ w panelu Admin.
-        # Hasło Admin otwiera też panel ENG.
-        "salt": "oel85-reconext",
-        "eng_password_hash": "",
-        "admin_password_hash": "",
-    },
-    "ui": {
-        "last_groups": [],
-    },
-}
-
-
-def decode_term(s):
-    """'\\r\\n' z configu -> '\r\n'."""
+def decode_term(s: str) -> str:
+    """'\\r\\n' zapisane w config.json -> '\r\n'. Wymagane przez transport.py (baseline OEL)."""
     return s.encode("utf-8").decode("unicode_escape")
 
 
-def encode_term(s):
+def encode_term(s: str) -> str:
     return s.encode("unicode_escape").decode("utf-8")
 
 
-def _merge(base, over):
-    out = copy.deepcopy(base)
-    for k, v in (over or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _merge(out[k], v)
-        else:
-            out[k] = v
-    return out
-
-
 class Config:
-    def __init__(self, path=CONFIG_PATH):
-        self.path = path
-        self.data = copy.deepcopy(DEFAULTS)
-        self.load()
+    # Kolory (jak w Hi-Pot PSU)
+    COLOR_PRIMARY = "#375ea9"
+    COLOR_ACCENT = "#4CAF50"
+    COLOR_BG = "#f5f5f5"
+    COLOR_WHITE = "#FFFFFF"
+    COLOR_ERROR = "#f44336"
+    COLOR_WARN = "#FF9800"
 
-    def load(self):
-        if os.path.exists(self.path):
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    self.data = _merge(DEFAULTS, json.load(f))
-            except Exception as e:  # uszkodzony plik -> domyślne
-                log.error("Nie można wczytać %s: %s - używam domyślnych", self.path, e)
-                self.data = copy.deepcopy(DEFAULTS)
+    # Okno
+    WINDOW_WIDTH = 1280
+    WINDOW_HEIGHT = 860
+    WINDOW_TITLE = f"Reconext {APP_NAME}"
+
+    # RS232 — Chroma Hi-Pot
+    DEFAULT_COM_PORT = "COM6"
+    DEFAULT_BAUDRATE = 9600
+
+    # RS232 / USB-COM — OWON OEL8512 (parametry z baseline OEL85 Verifier 1.2.4)
+    OEL_PORT = "COM3"
+    OEL_VID_PID = ""                 # np. 1A86:7523 — auto-wybór portu po VID:PID
+    OEL_BAUDRATE = 115200
+    OEL_TIMEOUT = 1.0                # [s]
+    OEL_DELAY_MS = 60                # przerwa po zapisie; w tym oknie OEL odsyła ERR
+    OEL_TERMINATOR = "\\n"           # TX i RX
+
+    # Arduino/STM — interlock klapy + przekaźniki torów
+    INTERLOCK_PORT = "COM5"
+    INTERLOCK_BAUDRATE = 9600
+    INTERLOCK_ENABLED = True
+    RELAYS_ENABLED = True            # sterowanie torem HIPOT/LOAD przez Arduino/STM
+    RELAY_TIMEOUT = 3.0              # [s] czas na potwierdzenie "OK PATH ..."
+
+    # Ogólne
+    STATION_NAME = ""                # pusto = nazwa komputera
+    DISPLAY_MODE = "both"            # both = oba testy na ekranie | sequential = jeden po drugim
+    AUTO_SAVE_RESULTS = True
+    TEST_TIMEOUT = 300               # [s] twardy limit jednego testu Hi-Pot
+    LOG_DIR = "logs"                 # raporty Hi-Pot (format Chroma 19052, odbiór IFS)
+    LOAD_LOG_DIR = "logs_load"       # raporty testu obciążenia (osobny plik na test)
+    ENG_LOG_DIR = "logs_eng"         # testy w pętli z panelu ENG (nie trafiają do IFS)
+
+    # Hasła ENG/Admin — sha256(salt + hasło); puste = ustawiane domyślne przy starcie
+    PASSWORD_SALT = "combo-psu-reconext"
+    ENG_PASSWORD_HASH = ""
+    ADMIN_PASSWORD_HASH = ""
+
+    # Tryb symulacji (tylko z linii poleceń: --sim) — nie zapisywany
+    SIMULATION = False
+
+    def __init__(self, simulation: bool = False):
+        from settings_manager import SettingsManager
+        self.SIMULATION = simulation
+        self._sm = SettingsManager()
+        self._sm.load_config(self)
+        self._ensure_passwords()
+
+    # ------------------------------------------------------------------ #
+    def _ensure_passwords(self):
         import auth
-        sec = self.data["security"]
-        changed = self._migrate()
-        if not sec.get("eng_password_hash"):
-            # migracja z v1.0 (jedno wspólne hasło) albo domyślne
-            sec["eng_password_hash"] = sec.pop("password_hash", "") or auth.hash_password("eng123", sec["salt"])
+        changed = False
+        if not self.ENG_PASSWORD_HASH:
+            self.ENG_PASSWORD_HASH = auth.hash_password("eng123", self.PASSWORD_SALT)
             changed = True
-        if not sec.get("admin_password_hash"):
-            sec["admin_password_hash"] = auth.hash_password("admin123", sec["salt"])
+        if not self.ADMIN_PASSWORD_HASH:
+            self.ADMIN_PASSWORD_HASH = auth.hash_password("admin123", self.PASSWORD_SALT)
             changed = True
-        sec.pop("password_hash", None)
         if changed:
             self.save()
 
-    def _migrate(self):
-        """Podnosi wartości ze starszych configów, gdy zmieniła się wymagana wartość minimalna.
-        (v1.1 zapisało rst_wait_ms=2000; od v1.2.3 potrzeba ~20 s, a stary config nadpisywał nowy default.)"""
-        ver = int(self.data.get("config_schema", 1))
-        if ver >= CONFIG_SCHEMA:
-            return False
-        t = self.data["test"]
-        if ver < 2 and int(t.get("rst_wait_ms", 0)) < 15000:   # jednorazowo; później decyduje Admin
-            log.warning("Migracja configu: rst_wait_ms %s -> 20000", t.get("rst_wait_ms"))
-            t["rst_wait_ms"] = 20000
-        self.data["config_schema"] = CONFIG_SCHEMA
-        return True
-
-    def save(self):
-        try:
-            with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            log.error("Nie można zapisać configu: %s", e)
-
-    # skróty
-    @property
-    def conn(self):
-        return self.data["connection"]
+    def save(self) -> bool:
+        return self._sm.save_config(self)
 
     @property
-    def test(self):
-        return self.data["test"]
+    def station(self) -> str:
+        return (self.STATION_NAME or "").strip() or socket.gethostname().upper()
 
-    @property
-    def security(self):
-        return self.data["security"]
+    @staticmethod
+    def _resolve(path: str, default: str) -> str:
+        path = (path or default).strip()
+        if not os.path.isabs(path) and not path.startswith("\\\\"):
+            path = os.path.join(app_dir(), path)
+        return path
 
-    def reports_path(self):
-        p = self.test["reports_dir"]
-        if not os.path.isabs(p):
-            p = os.path.join(app_dir(), p)
-        os.makedirs(p, exist_ok=True)
-        return p
+    def resolve_log_dir(self) -> str:
+        return self._resolve(self.LOG_DIR, "logs")
+
+    def resolve_load_log_dir(self) -> str:
+        return self._resolve(self.LOAD_LOG_DIR, "logs_load")
+
+    def resolve_eng_log_dir(self) -> str:
+        return self._resolve(self.ENG_LOG_DIR, "logs_eng")
+
+    def oel_conn(self) -> dict:
+        """Słownik połączenia w formacie transport.build_transport() (baseline)."""
+        return {
+            "transport": "sim" if self.SIMULATION else "serial",
+            "port": self.OEL_PORT,
+            "baudrate": int(self.OEL_BAUDRATE),
+            "bytesize": 8, "parity": "N", "stopbits": 1,
+            "timeout_s": float(self.OEL_TIMEOUT),
+            "tx_terminator": self.OEL_TERMINATOR,
+            "rx_terminator": self.OEL_TERMINATOR,
+            "inter_cmd_delay_ms": int(self.OEL_DELAY_MS),
+            "visa_resource": "",
+        }
