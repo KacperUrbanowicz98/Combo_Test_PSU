@@ -43,6 +43,8 @@ _FIELDS = [
     ("general", "log_dir",           "LOG_DIR",             str),
     ("general", "load_log_dir",      "LOAD_LOG_DIR",        str),
     ("general", "eng_log_dir",       "ENG_LOG_DIR",         str),
+    ("general", "stats_dir",         "STATS_DIR",           str),
+    ("general", "dashboard_port",    "DASHBOARD_PORT",      int),
 ]
 
 

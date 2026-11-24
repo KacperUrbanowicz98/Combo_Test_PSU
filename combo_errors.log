@@ -1,0 +1,26 @@
+
+===== 2026-11-24 10:20:01 =====
+Traceback (most recent call last):
+  File "C:\Users\kacper.urbanowicz\PycharmProjects\Combo_Test_PSU\main.py", line 53, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\kacper.urbanowicz\PycharmProjects\Combo_Test_PSU\main.py", line 48, in main
+    root.mainloop()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\kacper.urbanowicz\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+KeyboardInterrupt
+
+===== 2026-11-24 10:20:16 =====
+Traceback (most recent call last):
+  File "C:\Users\kacper.urbanowicz\PycharmProjects\Combo_Test_PSU\main.py", line 53, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\kacper.urbanowicz\PycharmProjects\Combo_Test_PSU\main.py", line 48, in main
+    root.mainloop()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\kacper.urbanowicz\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+KeyboardInterrupt

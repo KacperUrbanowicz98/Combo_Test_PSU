@@ -711,10 +711,11 @@ class EngPanel:
     def _tab_logs(self):
         outer, b = self._page("Logi", "Miejsca zapisu raportów")
         rows = (("Raporty Hi-Pot (IFS):", "LOG_DIR"), ("Raporty obciążenia:", "LOAD_LOG_DIR"),
-                ("Testy w pętli (ENG):", "ENG_LOG_DIR"))
+                ("Testy w pętli (ENG):", "ENG_LOG_DIR"), ("Statystyki / dashboard:", "STATS_DIR"))
         for r, (label, attr) in enumerate(rows):
             var = self._field(b, r, label, attr, width=70)
             tk.Button(b, text="…", width=3, command=lambda v=var: self._browse(v)).grid(row=r, column=2, padx=4)
+        self._field(b, len(rows), "Port dashboardu:", "DASHBOARD_PORT", width=8, conv=int)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
         bar.pack(anchor="w", padx=16, pady=8)
         st = self._status(outer)
@@ -727,7 +728,8 @@ class EngPanel:
 
     def _check_dirs(self, st):
         self._apply_vars()
-        dirs = [self.cfg.resolve_log_dir(), self.cfg.resolve_load_log_dir(), self.cfg.resolve_eng_log_dir()]
+        dirs = [self.cfg.resolve_log_dir(), self.cfg.resolve_load_log_dir(), self.cfg.resolve_eng_log_dir(),
+                self.cfg.resolve_stats_dir()]
 
         def work():
             out = []

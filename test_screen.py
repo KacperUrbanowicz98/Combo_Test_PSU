@@ -26,7 +26,8 @@ from tkinter import messagebox
 import hipot_runner
 from combo_sequence import ABORTED, FAIL, INVALID, PASS, SKIP, ComboSequence, hipot_fits
 from logger import save_load_report, save_report
-from shift_stats import ShiftStats
+import stats_store
+from config import APP_VERSION
 
 C_OK, C_ERR, C_WARN, C_IDLE = "#4CAF50", "#f44336", "#FF9800", "#9E9E9E"
 STATUS_TXT = {PASS: "PASS", FAIL: "FAIL", INVALID: "NIEWAŻNY", ABORTED: "PRZERWANY",
@@ -68,7 +69,7 @@ class TestScreen:
         self._pump_id = None
         self._recent_results = []
         self._history_frame = None
-        self.shift_stats = None
+        self._stats_tick_id = None
         self.sn_dialog = None
         self.sn_entry = None
         self.sn_result_label = None
@@ -183,13 +184,9 @@ class TestScreen:
         self._cfg(self.stop_button, state="disabled")
         self._pump_ui()
 
-        try:
-            self.shift_stats = ShiftStats(log_dir=self.config.resolve_log_dir(), operator=self.station)
-            self.shift_stats.on_rebuilt = lambda: self._ui(self._update_counter)
-        except Exception as e:
-            self.shift_stats = None
-            print(f"[SHIFT] Nie udało się uruchomić licznika zmiany: {e}")
-        self._update_counter()
+        if self.stats is not None:
+            self.stats.on_change = lambda: self._ui(self._update_counter)
+        self._stats_tick()
 
         if self.config.SIMULATION:
             import simulators
@@ -460,12 +457,17 @@ class TestScreen:
                  font=("Arial", 9, "bold")).pack(side=tk.LEFT)
         bar = tk.Frame(top, bg=c.COLOR_WHITE)
         bar.pack(side=tk.RIGHT)
+        self.lbl_offline = tk.Label(bar, text="", bg=c.COLOR_WHITE, fg=C_ERR, font=("Arial", 9, "bold"))
+        self.lbl_offline.pack(side=tk.LEFT, padx=(0, 10))
         self.lbl_shift = tk.Label(bar, text="Zmiana ?", bg=c.COLOR_WHITE, fg="#888", font=("Arial", 9))
         self.lbl_shift.pack(side=tk.LEFT, padx=(0, 10))
-        for txt, attr, fg in (("Razem:", "lbl_total", "#222"), ("✓ PASS:", "lbl_pass", C_OK),
-                              ("✗ FAIL:", "lbl_fail", C_ERR), ("RETEST:", "lbl_retests", C_WARN)):
-            tk.Label(bar, text=txt, bg=c.COLOR_WHITE, fg="#555", font=("Arial", 9)).pack(side=tk.LEFT)
-            lb = tk.Label(bar, text="0", bg=c.COLOR_WHITE, fg=fg, font=("Arial", 9, "bold"))
+        for txt, attr, fg in (("Testy:", "lbl_total", "#222"), ("✓ PASS:", "lbl_pass", C_OK),
+                              ("✗ FAIL:", "lbl_fail", C_ERR), ("", "lbl_fail_split", "#555"),
+                              ("RETEST:", "lbl_retests", C_WARN)):
+            if txt:
+                tk.Label(bar, text=txt, bg=c.COLOR_WHITE, fg="#555", font=("Arial", 9)).pack(side=tk.LEFT)
+            lb = tk.Label(bar, text="0" if txt else "", bg=c.COLOR_WHITE, fg=fg,
+                          font=("Arial", 9, "bold" if txt else "normal"))
             lb.pack(side=tk.LEFT, padx=(2, 10))
             setattr(self, attr, lb)
         tk.Button(bar, text="📊 Statystyki", bg="#eeeeee", fg="#555", font=("Arial", 8),
@@ -517,17 +519,51 @@ class TestScreen:
         self._recent_results = self._recent_results[-5:]
         self._refresh_history()
 
-    def _update_counter(self):
-        if not self.shift_stats:
+    def _stats_tick(self):
+        """Co 15 s: przełom dnia/zmiany i odświeżenie licznika (także bez nowych testów)."""
+        self._stats_tick_id = None
+        if self._closed:
             return
-        s = self.shift_stats.get_snapshot()
-        hours = (f" {s['shift_start']:%H:%M}-{s['shift_end']:%H:%M}"
-                 if s.get("shift_start") and s.get("shift_end") else "")
-        self._cfg(self.lbl_shift, text=f"Zmiana {s['shift_name']}{hours}")
-        self._cfg(self.lbl_total, text=str(s["total"]))
-        self._cfg(self.lbl_pass, text=str(s["passed"]))
-        self._cfg(self.lbl_fail, text=str(s["failed"]))
-        self._cfg(self.lbl_retests, text=str(s["retests"]))
+        if self.stats is not None:
+            self.stats.refresh_day()
+        self._update_counter()
+        try:
+            self._stats_tick_id = self.parent.after(15000, self._stats_tick)
+        except Exception:
+            pass
+
+    def _update_counter(self):
+        sh = stats_store.shift_info()
+        self._cfg(self.lbl_shift, text=f"Zmiana {sh['name']} {sh['start']:%H:%M}-{sh['end']:%H:%M}")
+        if self.stats is None:
+            return
+        s = self.stats.current()
+        cb, ld, hp = s["combo"], s["load"], s["hipot"]
+        self._cfg(self.lbl_total, text=str(cb["tests"]))
+        self._cfg(self.lbl_pass, text=str(cb["pass"]))
+        self._cfg(self.lbl_fail, text=str(cb["fail"]))
+        self._cfg(self.lbl_fail_split, text=f"(obc. {ld['fail']} / Hi-Pot {hp['fail']})")
+        self._cfg(self.lbl_retests, text=str(s["retest"]))
+        n = self.stats.pending
+        self._cfg(self.lbl_offline, text=f"⚠ statystyki offline ({n})" if n else "")
+
+    def _record_stats(self, res):
+        """Każdy zakończony test = jeden wpis statystyk (PASS/FAIL/NIEWAŻNY/PRZERWANY)."""
+        if self.stats is None:
+            return
+        try:
+            hp = res.hipot
+            rec = stats_store.make_record(
+                station=self.station, pn=self.model_info["model_key"], sn=self.serial_number,
+                combo=res.overall, load=res.load_status, hipot=res.hipot_status,
+                retest=bool(self._current_sn_is_duplicate) and res.overall in (PASS, FAIL),
+                load_code=getattr(res.load, "error_code", "") if res.load else "",
+                hipot_code=getattr(hp, "error_code", "") if hp else "",
+                reason="" if res.overall == PASS else res.reason,
+                app_version=APP_VERSION, sim=bool(self.config.SIMULATION))
+            self.stats.record(rec)
+        except Exception as e:
+            print(f"[STATS] Błąd zapisu wpisu: {e}")
 
     def _show_stats(self):
         from stats_window import show_stats_window
@@ -941,6 +977,7 @@ class TestScreen:
                       (self.next_sn_button, "normal"), (self.reconnect_button, "normal"),
                       (self.start_button, "disabled")):
             self._cfg(w, state=st)
+        self._record_stats(res)
 
         # Panele
         if res.load is not None:
@@ -985,24 +1022,10 @@ class TestScreen:
 
         # PASS / FAIL - liczone w statystykach
         self._serial_consumed = True
-        is_dup = bool(self._current_sn_is_duplicate)
         if res.overall == PASS:
             self._cfg(self.status_label, text="✓ TEST ZALICZONY (PASS)", fg=C_OK)
         else:
             self._cfg(self.status_label, text=f"✗ TEST NIEZALICZONY (FAIL) - {res.reason}", fg=C_ERR)
-        if self.shift_stats:
-            try:
-                self.shift_stats.add_result(res.overall, is_duplicate=is_dup,
-                                            model_key=self.model_info["model_key"])
-            except Exception as e:
-                print(f"[SHIFT] Błąd zapisu: {e}")
-        if self.stats:
-            try:
-                self.stats.add_result(operator=self.station, model_key=self.model_info["model_key"],
-                                      mode=self.tp.get("mode", "AC") + ("+LOAD" if self.load_enabled else ""),
-                                      result=res.overall, is_retest=is_dup)
-            except Exception as e:
-                print(f"[STATS] Błąd zapisu: {e}")
         self._add_recent(res)
         self._update_counter()
         if res.save_errors:
@@ -1057,8 +1080,13 @@ class TestScreen:
             if e["serial"].upper() == serial.upper():
                 return {"found": True, "where": "session", "last_time": e["time"],
                         "last_result": e["result"]}
-        ss = self.shift_stats
-        start, end = (ss.shift_start, ss.shift_end) if ss else (None, None)
+        if self.stats is not None:
+            hit = self.stats.seen_in_shift(serial)
+            if hit:
+                return {"found": True, "where": "stats", "last_time": hit["ts"][11:16],
+                        "last_result": hit["combo"]}
+        sh = stats_store.shift_info()
+        start, end = sh["start"], sh["end"]
         # Raporty Hi-Pot: SN_YYYYmmddHHMMSS.txt, obciążenia: SN_YYYYmmddHHMMSS_LOAD.txt
         # (sztuka z FAIL obciążenia ma tylko raport LOAD - dlatego oba katalogi).
         pat = re.compile(r'^' + re.escape(serial.upper()) + r'_(\d{14})(?:_\d+)?(?:_LOAD)?(?:_\d+)?\.txt$',
@@ -1093,7 +1121,8 @@ class TestScreen:
             if autostart:
                 self._maybe_start_test()
             return
-        where = "tej sesji" if dup.get("where") == "session" else f"logów ({dup.get('last_time')})"
+        where = {"session": "tej sesji", "stats": f"tej zmianie ({dup.get('last_time')})"}.get(
+            dup.get("where"), f"logów ({dup.get('last_time')})")
         last = f" (wynik: {STATUS_TXT.get(dup.get('last_result'), dup.get('last_result'))})" \
             if dup.get("last_result") else ""
         self._cfg(self.status_label, text=f"⚠ DUPLIKAT: SN {serial} był już testowany - {where}{last}",
@@ -1260,11 +1289,13 @@ class TestScreen:
                 self.parent.after_cancel(self._pump_id)
             except Exception:
                 pass
-        if self.shift_stats:
+        if self._stats_tick_id is not None:
             try:
-                self.shift_stats.stop()
+                self.parent.after_cancel(self._stats_tick_id)
             except Exception:
                 pass
+        if self.stats is not None:
+            self.stats.on_change = None
         self._disconnect_devices()
 
     def _cleanup_and_go_back(self):

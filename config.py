@@ -6,7 +6,7 @@ import socket
 from app_paths import app_dir
 
 APP_NAME = "Combo Test PSU"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 
 
 def decode_term(s: str) -> str:
@@ -69,6 +69,8 @@ class Config:
     LOG_DIR = "logs"                 # raporty Hi-Pot (format Chroma 19052, odbiór IFS)
     LOAD_LOG_DIR = "logs_load"       # raporty testu obciążenia (osobny plik na test)
     ENG_LOG_DIR = "logs_eng"         # testy w pętli z panelu ENG (nie trafiają do IFS)
+    STATS_DIR = ""                   # statystyki (wpisy JSONL); pusto = <LOG_DIR>\Combo Stats
+    DASHBOARD_PORT = 8080            # port dashboard_server.py
 
     # Tryb symulacji (tylko z linii poleceń: --sim) - nie zapisywany
     SIMULATION = False
@@ -101,6 +103,14 @@ class Config:
 
     def resolve_eng_log_dir(self) -> str:
         return self._resolve(self.ENG_LOG_DIR, "logs_eng")
+
+    def resolve_stats_dir(self) -> str:
+        """Statystyki dla dashboardu. W symulacji zawsze lokalnie - nie mieszają się z produkcją."""
+        if self.SIMULATION:
+            return os.path.join(app_dir(), "stats_sim")
+        if (self.STATS_DIR or "").strip():
+            return self._resolve(self.STATS_DIR, "")
+        return os.path.join(self.resolve_log_dir(), "Combo Stats")
 
     def oel_conn(self) -> dict:
         """Słownik połączenia w formacie transport.build_transport() (baseline)."""

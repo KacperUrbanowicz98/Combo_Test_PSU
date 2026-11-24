@@ -1,4 +1,4 @@
-# Reconext Combo Test PSU 1.1.1
+# Reconext Combo Test PSU 1.2.0
 
 Stanowisko testowe zasilaczy: **test obciążenia (OWON OEL8512) + Hi-Pot (Chroma 19052)** w jednym cyklu,
 z przełączaniem zasilacza modułem przekaźników (komendy `load` / `hipot`) i interlockiem klapy.
@@ -13,6 +13,8 @@ pip install pyserial
 python main.py          # sprzęt
 python main.py --sim    # symulacja Chromy, OEL8512, interlocka i przekaźnika
 python create_exe.py    # -> dist/Combo Test PSU/  (kopiować cały folder)
+python dashboard_server.py              # strona z wynikami: http://<komputer>:8080/
+python create_exe.py --dashboard        # -> dist/Combo Dashboard/
 ```
 
 Bez logowania HRID - w statystykach i nazwach katalogów zmian jest **nazwa stanowiska**
@@ -38,7 +40,7 @@ Bez logowania HRID - w statystykach i nazwach katalogów zmian jest **nazwa stan
       wykonania testu). Limit czasu = okno przekaźnika (patrz niżej). Raport Hi-Pot (IFS),
    6. zawsze po Hi-Pot (także po STOP / klapie): STOP Chromy → odczekanie `hv_discharge_s` → `load`.
 4. Wynik całkowity: PASS tylko gdy oba testy PASS. NIEWAŻNY (brak komunikacji, przekaźnik nie
-   odpowiada, błąd konfiguracji OEL) i PRZERWANY nie są liczone w statystykach.
+   odpowiada, błąd konfiguracji OEL) i PRZERWANY nie są liczone jako testy (tylko informacyjnie).
 
 **Okno przekaźnika.** Moduł sam wraca do `load` po ~30 s bez aktywności (`revert_s`). Żeby przekaźnik
 nie przełączył się na OEL w trakcie wysokiego napięcia:
@@ -60,7 +62,7 @@ OCP = 1.25·Imax + 0.2 A, OPP = 1.3·Vmax·Imax + 2 W, Von = 0.5·Vmin. Bez `*RS
 
 Na ekranie: aktualny SN, status połączeń (Chroma / OEL8512 / Interlock / Przekaźnik), pozycja przekaźnika
 (LOAD / HI-POT), stan klapy, pomiary na żywo, historia 5 ostatnich wyników (obciążenie / Hi-Pot / wynik),
-licznik zmiany.
+licznik bieżącej zmiany tego stanowiska (testy / PASS / FAIL z podziałem na obciążenie i Hi-Pot / retest).
 
 ## Raporty (osobny plik na test)
 
@@ -74,6 +76,39 @@ Przy błędzie zapisu - kopia w `logs_awaryjne` obok aplikacji i komunikat dla o
 
 Sztuka z FAIL obciążenia ma **tylko raport LOAD** (Hi-Pot nie był wykonywany) - nie pojawi się w IFS.
 Kontrola duplikatu SN przegląda oba katalogi (Hi-Pot i obciążenie).
+
+## Statystyki i dashboard (`stats_store.py`, `stats_window.py`, `dashboard_server.py`)
+
+**Zasada:** każdy zakończony test = jedna linia JSON w pliku
+`<katalog statystyk>\<stanowisko>\results_<dzień>.jsonl` (ENG → Logi → „Statystyki / dashboard”;
+pusto = `<katalog raportów Hi-Pot>\Combo Stats`). Liczniki nie są nigdzie przechowywane - zawsze są
+liczone z wpisów, więc przełom zmiany niczego nie przestawia i nie ma się co rozjechać.
+
+* **Zmiany:** I 06:00-14:00, II 14:00-22:00, III 22:00-06:00. **Dzień produkcyjny** 06:00-06:00
+  (test o 02:00 należy do zmiany III dnia poprzedniego) - dzień = I + II + III.
+* Zmiana i dzień są wyliczane z godziny testu i zapisane we wpisie. Licznik na ekranie testu
+  odświeża się co 15 s - przechodzi na nową zmianę o 06/14/22 także bez nowego testu.
+* **Liczone osobno:** COMBO (wynik całkowity), OBCIĄŻENIE, HI-POT - testy / PASS / FAIL / yield.
+  Test = wynik PASS albo FAIL. Retesty (ten sam SN ponownie) wchodzą do testów i są liczone osobno.
+  NIEWAŻNE i PRZERWANE - tylko informacyjnie. FPY = PASS przy pierwszym teście danego SN w dniu.
+* Każde stanowisko pisze **tylko do własnego pliku** - kilka stanowisk na jednym udziale nie koliduje.
+* Zapis w tle. Gdy udział sieciowy jest niedostępny, wpisy trafiają do `stats_outbox.jsonl` obok
+  aplikacji (na ekranie: „⚠ statystyki offline (N)”) i są dosyłane automatycznie co 30 s.
+  Każdy wpis ma unikalne id - ponowne dosłanie nie dubluje wyników.
+* W symulacji (`--sim`) statystyki idą do lokalnego `stats_sim` i nie mieszają się z produkcją.
+
+**Dashboard** (`dashboard_server.py`): serwer WWW tylko do odczytu, bez dodatkowych bibliotek.
+Uruchomić na komputerze, który widzi katalog statystyk (serwer lub PC w sieci):
+
+```
+python dashboard_server.py --dir "\\serwer\udział\Combo Stats" --port 8080
+```
+
+Strona `http://<nazwa-komputera>:8080/` odświeża się co 30 s: bieżąca zmiana (domyślnie, sama
+przechodzi na kolejną zmianę), cały dzień, zmiany I/II/III, wybór dnia; kafelki COMBO / obciążenie /
+Hi-Pot, wykres testów na godzinę, stanowiska (z czasem ostatniego testu), przyczyny FAIL, zmiany,
+profile, ostatnie testy. Link można zapisać z filtrem, np. `?shift=current` na monitor na hali.
+Port w sieci firmowej (firewall) - do uzgodnienia z IT.
 
 ## Panel ENG
 

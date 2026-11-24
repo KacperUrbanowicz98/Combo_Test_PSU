@@ -1,6 +1,24 @@
+Combo Test PSU - v1.2.0
+
+- Nowe statystyki (stats_store.py): każdy test = jeden wpis JSON w pliku stanowiska; liczniki dzienne
+  i zmianowe liczone z wpisów (bez przechowywanych liczników - brak błędów na przełomie zmian).
+  Dzień produkcyjny 06:00-06:00. Osobno: COMBO, obciążenie, Hi-Pot (testy / PASS / FAIL / yield),
+  retesty, FPY, nieważne, przerwane, przyczyny FAIL.
+- Zapis statystyk w tle z lokalną skrzynką, gdy udział sieciowy jest niedostępny (dosyłanie co 30 s).
+- Licznik na ekranie testu: testy / PASS / FAIL (obc. / Hi-Pot) / retest, sam przechodzi na nową zmianę.
+- Nowe okno statystyk: dzień lub zmiana, kafelki COMBO / obciążenie / Hi-Pot, tabele zmian,
+  stanowisk, profili i przyczyn FAIL.
+- Dashboard WWW (dashboard_server.py + dashboard_page.py) - strona z wynikami pod adresem URL.
+  create_exe.py --dashboard buduje "Combo Dashboard.exe".
+- ENG -> Logi: katalog statystyk i port dashboardu.
+- Okno potwierdzenia profilu: nazwy parametrów kolorowe (obciążenie niebieski, Hi-Pot czerwony),
+  wartości ciemne.
+- Usunięte: stats_manager.py, shift_stats.py (stary format statystyk).
+
 Combo Test PSU - v1.1.1
 
-- Okno potwierdzenia profilu: pod numerem PN lista urządzeń, na które wchodzi zasilacz (tabela PN -> modele).
+- Okno potwierdzenia profilu: pod numerem PN małym szarym napisem lista urządzeń, na które wchodzi
+  zasilacz (tabela PN -> modele) - zamiast opisu profilu (opis tylko, gdy profil nie ma listy urządzeń).
   Nowe pole profilu „devices” - edytowalne w ENG -> Profile („Urządzenia”); istniejący models.json
   uzupełniany automatycznie przy starcie.
 - W całej aplikacji długie myślniki zamienione na zwykły „-”.

@@ -1,323 +1,186 @@
 # stats_window.py
 """
-Okno statystyk (zmiany + historia dzienna) - przeniesione z test_screen.py
-Hi-Pot PSU 1.1.2. Zamiast HRID operatora: nazwa stanowiska.
-Liczony jest WYNIK CAŁKOWITY sztuki (Hi-Pot + obciążenie).
+Okno statystyk - dzień produkcyjny (06:00-06:00) albo jedna zmiana, wszystkie stanowiska
+zapisujące do tego samego katalogu statystyk. Dane: stats_store (te same co dashboard).
+
+Liczone osobno: COMBO (wynik całkowity), OBCIĄŻENIE, HI-POT - testy / PASS / FAIL / yield.
 """
-import os
 import threading
 import tkinter as tk
-from datetime import date
+from datetime import timedelta
 from tkinter import ttk
 
-from shift_stats import parse_shift_file
+import stats_store
+
+C_OK, C_ERR, C_WARN = "#2E7D32", "#C62828", "#E65100"
+TYPES = (("combo", "COMBO (całość)"), ("load", "OBCIĄŻENIE"), ("hipot", "HI-POT"))
+COLS = (("tests", "Testy", 60), ("pass", "PASS", 60), ("fail", "FAIL", 60), ("yield", "Yield", 70),
+        ("l_fail", "Obc. FAIL", 80), ("h_fail", "Hi-Pot FAIL", 85), ("retest", "Retest", 65),
+        ("fpy", "FPY", 70))
+
+
+def _pct(a, b):
+    return f"{100.0 * a / b:.1f}%" if b else "-"
+
+
+def _row_values(s):
+    cb = s["combo"]
+    return (cb["tests"], cb["pass"], cb["fail"], _pct(cb["pass"], cb["tests"]),
+            s["load"]["fail"], s["hipot"]["fail"], s["retest"],
+            _pct(s["first_pass"], s["first_tests"]))
 
 
 def show_stats_window(parent, config):
-    import json as _json
-    from datetime import timedelta as td
-
-    log_dir   = config.resolve_log_dir()
-    stats_dir = os.path.join(log_dir, "Daily PSU Combo stats")
-    shift_dir = os.path.join(log_dir, "Shift Reports")
+    c = config
+    stats_dir = config.resolve_stats_dir()
+    state = {"day": stats_store.production_day(), "shift": "Dzień", "result": None}
 
     win = tk.Toplevel(parent)
     win.title("Statystyki")
-    win.configure(bg=config.COLOR_BG)
-    win.geometry(f"960x720+{max(0, win.winfo_screenwidth() // 2 - 480)}+"
-                 f"{max(0, win.winfo_screenheight() // 2 - 360)}")
+    win.configure(bg=c.COLOR_BG)
+    win.geometry(f"1000x760+{max(0, win.winfo_screenwidth() // 2 - 500)}+"
+                 f"{max(0, win.winfo_screenheight() // 2 - 380)}")
     win.transient(parent)
     win.grab_set()
 
-    hdr = tk.Frame(win, bg=config.COLOR_PRIMARY, height=55)
+    hdr = tk.Frame(win, bg=c.COLOR_PRIMARY, height=55)
     hdr.pack(fill=tk.X)
     hdr.pack_propagate(False)
-    tk.Label(hdr, text="Statystyki", bg=config.COLOR_PRIMARY,
-             fg="white", font=("Arial", 17, "bold")).pack(side=tk.LEFT, padx=20)
-    tk.Button(hdr, text="Zamknij", bg=config.COLOR_ERROR,
-              fg="white", font=("Arial", 10, "bold"), relief=tk.FLAT,
-              cursor="hand2", command=win.destroy
-              ).pack(side=tk.RIGHT, padx=15, pady=12)
+    tk.Label(hdr, text="Statystyki", bg=c.COLOR_PRIMARY, fg="white",
+             font=("Arial", 17, "bold")).pack(side=tk.LEFT, padx=20)
+    tk.Button(hdr, text="Zamknij", bg=c.COLOR_ERROR, fg="white", font=("Arial", 10, "bold"),
+              relief=tk.FLAT, cursor="hand2", command=win.destroy).pack(side=tk.RIGHT, padx=15, pady=12)
 
-    nb = ttk.Notebook(win)
-    nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+    # ---- filtry: dzień + zmiana
+    bar = tk.Frame(win, bg=c.COLOR_BG)
+    bar.pack(fill=tk.X, padx=12, pady=(10, 4))
+    day_lbl = tk.Label(bar, text="", bg=c.COLOR_BG, fg=c.COLOR_PRIMARY, font=("Arial", 13, "bold"),
+                       width=26)
 
-    def make_scroll(parent):
-        c = tk.Canvas(parent, bg=config.COLOR_BG, highlightthickness=0)
-        sb = ttk.Scrollbar(parent, orient="vertical", command=c.yview)
-        c.configure(yscrollcommand=sb.set)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-        c.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sf = tk.Frame(c, bg=config.COLOR_BG)
-        cw = c.create_window(0, 0, window=sf, anchor="nw")
-        sf.bind("<Configure>", lambda e: c.configure(scrollregion=c.bbox("all")))
-        c.bind("<Configure>", lambda e: c.itemconfig(cw, width=e.width))
+    def nav(delta):
+        state["day"] = state["day"] + timedelta(days=delta) if delta else stats_store.production_day()
+        load()
 
-        # POPRAWKA: było bind_all("<MouseWheel>") - globalna podpinka,
-        # która po zamknięciu okna wskazywała na zniszczony Canvas
-        # i przy każdym ruchu rolki sypała TclError w całej aplikacji.
-        def _wheel(event):
-            try:
-                c.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            except Exception:
-                pass
-        for widget in (c, sf):
-            widget.bind("<MouseWheel>", _wheel)
-            widget.bind("<Button-4>", lambda e: c.yview_scroll(-1, "units"))
-            widget.bind("<Button-5>", lambda e: c.yview_scroll(1, "units"))
-        return sf
-
-    # ---------------- ZAKŁADKA 1 - ZMIANY ---------------- #
-    tab_shifts = tk.Frame(nb, bg=config.COLOR_BG)
-    nb.add(tab_shifts, text="  Zmiany  ")
-
-    nav_f = tk.Frame(tab_shifts, bg=config.COLOR_BG)
-    nav_f.pack(fill=tk.X, padx=10, pady=(8, 0))
-    day_lbl = tk.Label(nav_f, text="", bg=config.COLOR_BG,
-                       fg=config.COLOR_PRIMARY, font=("Arial", 12, "bold"))
+    for txt, d in (("◀", -1),):
+        tk.Button(bar, text=txt, width=3, command=lambda d=d: nav(d)).pack(side=tk.LEFT)
     day_lbl.pack(side=tk.LEFT, padx=6)
+    tk.Button(bar, text="▶", width=3, command=lambda: nav(1)).pack(side=tk.LEFT)
+    tk.Button(bar, text="Dziś", command=lambda: nav(0)).pack(side=tk.LEFT, padx=(8, 20))
+    shift_var = tk.StringVar(value="Dzień")
+    for name in ("Dzień", "I", "II", "III"):
+        tk.Radiobutton(bar, text="Cały dzień" if name == "Dzień" else f"Zmiana {name}",
+                       value=name, variable=shift_var, indicatoron=False, padx=10, pady=3,
+                       bg="white", selectcolor="#cfe0f7", font=("Arial", 10),
+                       command=lambda: (state.update(shift=shift_var.get()), render())
+                       ).pack(side=tk.LEFT, padx=2)
+    tk.Button(bar, text="⟳ Odśwież", command=lambda: load()).pack(side=tk.RIGHT)
+    status = tk.Label(win, text="", bg=c.COLOR_BG, fg="#666", font=("Arial", 9))
+    status.pack(anchor="w", padx=14)
 
-    state = {"day": date.today(), "busy": False}
-    scroll_shifts = make_scroll(tab_shifts)
+    # ---- kafelki COMBO / OBCIĄŻENIE / HI-POT
+    tiles_f = tk.Frame(win, bg=c.COLOR_BG)
+    tiles_f.pack(fill=tk.X, padx=10, pady=4)
+    tiles = {}
+    for i, (key, title) in enumerate(TYPES):
+        f = tk.Frame(tiles_f, bg="white", relief=tk.RAISED, borderwidth=1)
+        f.grid(row=0, column=i, sticky="nsew", padx=4)
+        tiles_f.columnconfigure(i, weight=1)
+        tk.Label(f, text=title, bg="white", fg=c.COLOR_PRIMARY, font=("Arial", 11, "bold")
+                 ).pack(anchor="w", padx=12, pady=(8, 0))
+        big = tk.Label(f, text="0", bg="white", fg="#222", font=("Arial", 26, "bold"))
+        big.pack(anchor="w", padx=12)
+        sub = tk.Label(f, text="", bg="white", fg="#444", font=("Arial", 10), justify="left")
+        sub.pack(anchor="w", padx=12, pady=(0, 10))
+        tiles[key] = (big, sub)
+    extra = tk.Label(win, text="", bg=c.COLOR_BG, fg="#444", font=("Arial", 10))
+    extra.pack(anchor="w", padx=14, pady=(2, 6))
 
-    def collect_shifts(day):
-        """Czyta pliki zmian - wołane z wątku tła (dysk sieciowy)."""
-        out = []
-        try:
-            if not os.path.isdir(shift_dir):
-                return out
-            for hrid in sorted(os.listdir(shift_dir)):
-                hrid_path = os.path.join(shift_dir, hrid)
-                if not os.path.isdir(hrid_path):
-                    continue
-                files = [os.path.join(hrid_path, f)
-                         for f in sorted(os.listdir(hrid_path))
-                         if f.endswith(".txt") and day.strftime("%Y-%m-%d") in f]
-                rows = [d for d in (parse_shift_file(f) for f in files) if d]
-                if rows:
-                    out.append((hrid, rows))
-        except Exception as e:
-            print(f"[STATS] Błąd czytania zmian: {e}")
-        return out
+    # ---- tabele
+    nb = ttk.Notebook(win)
+    nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+    trees = {}
+    for key, title in (("shifts", "Zmiany"), ("stations", "Stanowiska"), ("profiles", "Profile"),
+                       ("fails", "Przyczyny FAIL")):
+        frame = tk.Frame(nb, bg="white")
+        nb.add(frame, text=f"  {title}  ")
+        if key == "fails":
+            t = ttk.Treeview(frame, columns=("n",), show="tree headings")
+            t.heading("#0", text="Przyczyna (test + kod)")
+            t.column("#0", width=380)
+            t.heading("n", text="Ilość")
+            t.column("n", width=90, anchor="center")
+        else:
+            t = ttk.Treeview(frame, columns=[k for k, _, _ in COLS], show="tree headings")
+            t.heading("#0", text={"shifts": "Zmiana", "stations": "Stanowisko", "profiles": "PN"}[key])
+            t.column("#0", width=190)
+            for k, h, w in COLS:
+                t.heading(k, text=h)
+                t.column(k, width=w, anchor="center")
+        t.pack(fill=tk.BOTH, expand=True)
+        trees[key] = t
 
-    def render_shifts(day, data):
-        if not win.winfo_exists():
+    # ------------------------------------------------------------------ #
+    def render():
+        res = state["result"]
+        if res is None:
             return
-        for w in scroll_shifts.winfo_children():
-            w.destroy()
-        day_lbl.config(text="Dzisiaj" if day == date.today()
-                       else day.strftime("%d.%m.%Y"))
+        recs = res
+        if state["shift"] != "Dzień":
+            num = {"I": 1, "II": 2, "III": 3}[state["shift"]]
+            recs = [r for r in res if r.get("shift") == num]
+        rep = stats_store.build_report(recs)
+        tot = rep["total"]
+        for key, _ in TYPES:
+            big, sub = tiles[key]
+            s = tot[key]
+            big.config(text=str(s["tests"]))
+            sub.config(text=f"✓ PASS {s['pass']}     ✗ FAIL {s['fail']}     "
+                            f"Yield {_pct(s['pass'], s['tests'])}")
+        extra.config(text=f"Retesty: {tot['retest']}     FPY (pierwszy test SN): "
+                          f"{_pct(tot['first_pass'], tot['first_tests'])}     "
+                          f"Nieważne: {tot['invalid']}     Przerwane: {tot['aborted']}")
+        for t in trees.values():
+            t.delete(*t.get_children())
+        full = stats_store.build_report(res)
+        for num, name, _, _ in stats_store.SHIFTS:
+            trees["shifts"].insert("", "end", text=f"Zmiana {name}  ({stats_store.shift_hours(num)})",
+                                   values=_row_values(full["shifts"][name]))
+        trees["shifts"].insert("", "end", text="CAŁY DZIEŃ", values=_row_values(full["total"]))
+        for key in ("stations", "profiles"):
+            for name, s in rep[key].items():
+                trees[key].insert("", "end", text=name, values=_row_values(s))
+        for fc in rep["fail_codes"]:
+            trees["fails"].insert("", "end", text=fc["code"], values=(fc["count"],))
 
-        if not data:
-            tk.Label(scroll_shifts,
-                     text=f"Brak danych zmianowych dla {day.strftime('%d.%m.%Y')}.",
-                     bg=config.COLOR_BG, fg="#888",
-                     font=("Arial", 11)).pack(pady=30)
-            return
-
-        for hrid, rows in data:
-            hf = tk.Frame(scroll_shifts, bg=config.COLOR_PRIMARY)
-            hf.pack(fill=tk.X, pady=(12, 0))
-            tk.Label(hf, text=f"  Stanowisko: {hrid}", bg=config.COLOR_PRIMARY,
-                     fg="white", font=("Arial", 12, "bold")
-                     ).pack(side=tk.LEFT, padx=10, pady=6)
-
-            for d in rows:
-                sf2 = tk.Frame(scroll_shifts, bg="#37474F")
-                sf2.pack(fill=tk.X, pady=(2, 0))
-                total = d["passed"] + d["failed"]
-                tk.Label(sf2,
-                         text=f"  Zmiana {d['shift_name']}  ({d['hours']})    "
-                              f"Razem: {total}   PASS: {d['passed']}   "
-                              f"FAIL: {d['failed']}   RETEST: {d['retests']}",
-                         bg="#37474F", fg="white",
-                         font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10, pady=5)
-
-                if not d["models"]:
-                    continue
-
-                col_hdr = tk.Frame(scroll_shifts, bg="#ECEFF1")
-                col_hdr.pack(fill=tk.X)
-                for txt, w in [("Model", 280), ("PASS", 80), ("FAIL", 80),
-                               ("RETEST", 80), ("Razem", 80)]:
-                    tk.Label(col_hdr, text=txt, bg="#ECEFF1", fg="#333",
-                             font=("Arial", 9, "bold"), width=w // 8,
-                             anchor="center").pack(side=tk.LEFT, padx=2, pady=3)
-
-                for i, (mk, cnt) in enumerate(sorted(d["models"].items())):
-                    bg = "#ffffff" if i % 2 == 0 else "#f5f5f5"
-                    row = tk.Frame(scroll_shifts, bg=bg)
-                    row.pack(fill=tk.X)
-                    for val, w, fg in [
-                        (mk, 280, "#333"),
-                        (cnt["pass"], 80, config.COLOR_ACCENT),
-                        (cnt["fail"], 80,
-                         config.COLOR_ERROR if cnt["fail"] > 0 else "#333"),
-                        (cnt["retest"], 80,
-                         "#FF9800" if cnt["retest"] > 0 else "#aaa"),
-                        (cnt["pass"] + cnt["fail"], 80, "#222"),
-                    ]:
-                        tk.Label(row, text=str(val), bg=bg, fg=fg,
-                                 font=("Arial", 10), width=w // 8,
-                                 anchor="center").pack(side=tk.LEFT, padx=2, pady=2)
-
-    def load_shifts(day):
-        if state["busy"]:
-            return
-        state["busy"] = True
-        for w in scroll_shifts.winfo_children():
-            w.destroy()
-        tk.Label(scroll_shifts, text="Wczytywanie...", bg=config.COLOR_BG,
-                 fg="#888", font=("Arial", 11)).pack(pady=30)
+    def load():
+        d = state["day"]
+        day_lbl.config(text=f"Dzień {d:%Y-%m-%d}  (06:00-06:00)")
+        status.config(text="Wczytywanie...")
+        holder = {}
 
         def worker():
-            data = collect_shifts(day)
-            state["busy"] = False
             try:
-                if win.winfo_exists():
-                    win.after(0, lambda: render_shifts(day, data))
-            except Exception:
-                pass
-        threading.Thread(target=worker, daemon=True).start()
+                holder["r"] = stats_store.read_day(stats_dir, d, include_sim=bool(config.SIMULATION))
+            except Exception as e:
+                holder["e"] = e
+        th = threading.Thread(target=worker, daemon=True)
+        th.start()
 
-    def change_shift_day(delta):
-        state["day"] = state["day"] + td(days=delta)
-        load_shifts(state["day"])
-
-    tk.Button(nav_f, text="◀ Poprzedni", bg="#607D8B", fg="white",
-              font=("Arial", 9), relief=tk.FLAT, cursor="hand2",
-              command=lambda: change_shift_day(-1)).pack(side=tk.LEFT, padx=4)
-    tk.Button(nav_f, text="Następny ▶", bg="#607D8B", fg="white",
-              font=("Arial", 9), relief=tk.FLAT, cursor="hand2",
-              command=lambda: change_shift_day(1)).pack(side=tk.LEFT, padx=4)
-
-    # ---------------- ZAKŁADKA 2 - HISTORIA DZIENNA ---------------- #
-    tab_daily = tk.Frame(nb, bg=config.COLOR_BG)
-    nb.add(tab_daily, text="  Historia dzienna  ")
-
-    nav2 = tk.Frame(tab_daily, bg=config.COLOR_BG)
-    nav2.pack(fill=tk.X, padx=10, pady=(8, 0))
-    day2_lbl = tk.Label(nav2, text="", bg=config.COLOR_BG,
-                        fg=config.COLOR_PRIMARY, font=("Arial", 12, "bold"))
-    day2_lbl.pack(side=tk.LEFT, padx=6)
-
-    state2 = {"day": date.today(), "busy": False}
-    scroll_daily = make_scroll(tab_daily)
-
-    def load_daily(day):
-        path = os.path.join(stats_dir, f"stats_{day.strftime('%Y-%m-%d')}.json")
-        try:
-            if not os.path.exists(path):
-                return {}
-            with open(path, "r", encoding="utf-8") as f:
-                raw = _json.load(f)
-            result = {}
-            for op, rows in raw.items():
-                if not isinstance(rows, dict):
-                    continue
-                result[op] = [{"model": e.get("model", "?"),
-                               "mode": e.get("mode", "AC"),
-                               "pass": e.get("pass", 0),
-                               "fail": e.get("fail", 0),
-                               "retest": e.get("retest", 0),
-                               "total": e.get("pass", 0) + e.get("fail", 0)}
-                              for e in rows.values() if isinstance(e, dict)]
-            return result
-        except Exception as e:
-            print(f"[STATS] Błąd odczytu {path}: {e}")
-            return {}
-
-    def render_daily(day, data):
-        if not win.winfo_exists():
-            return
-        for w in scroll_daily.winfo_children():
-            w.destroy()
-        day2_lbl.config(text="Dzisiaj" if day == date.today()
-                        else day.strftime("%d.%m.%Y"))
-        if not data:
-            tk.Label(scroll_daily, text="Brak danych dla wybranego dnia.",
-                     bg=config.COLOR_BG, fg="#888",
-                     font=("Arial", 12)).pack(pady=40)
-            return
-
-        grand = {"total": 0, "pass": 0, "fail": 0}
-        for op, rows in data.items():
-            op_total = sum(r["total"] for r in rows)
-            op_pass  = sum(r["pass"] for r in rows)
-            op_fail  = sum(r["fail"] for r in rows)
-            grand["total"] += op_total
-            grand["pass"]  += op_pass
-            grand["fail"]  += op_fail
-
-            oh = tk.Frame(scroll_daily, bg=config.COLOR_PRIMARY)
-            oh.pack(fill=tk.X, pady=(10, 0))
-            tk.Label(oh, text=f"  Stanowisko: {op}   Razem: {op_total}   "
-                              f"PASS: {op_pass}   FAIL: {op_fail}",
-                     bg=config.COLOR_PRIMARY, fg="white",
-                     font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=10, pady=5)
-
-            ch = tk.Frame(scroll_daily, bg="#ECEFF1")
-            ch.pack(fill=tk.X)
-            for txt, w in [("Model", 260), ("Tryb", 70), ("PASS", 70),
-                           ("FAIL", 70), ("RETEST", 70), ("Razem", 70)]:
-                tk.Label(ch, text=txt, bg="#ECEFF1", fg="#333",
-                         font=("Arial", 9, "bold"), width=w // 8,
-                         anchor="center").pack(side=tk.LEFT, padx=2, pady=3)
-
-            for i, row in enumerate(rows):
-                bg = "#fff" if i % 2 == 0 else "#f5f5f5"
-                rf = tk.Frame(scroll_daily, bg=bg)
-                rf.pack(fill=tk.X)
-                for val, w, fg in [
-                    (row["model"], 260, "#333"),
-                    (row["mode"], 70, "#555"),
-                    (row["pass"], 70, config.COLOR_ACCENT),
-                    (row["fail"], 70,
-                     config.COLOR_ERROR if row["fail"] > 0 else "#333"),
-                    (row["retest"], 70,
-                     "#FF9800" if row["retest"] > 0 else "#aaa"),
-                    (row["total"], 70, "#222"),
-                ]:
-                    tk.Label(rf, text=str(val), bg=bg, fg=fg,
-                             font=("Arial", 10), width=w // 8,
-                             anchor="center").pack(side=tk.LEFT, padx=2, pady=2)
-
-        sm = tk.Frame(scroll_daily, bg="#263238")
-        sm.pack(fill=tk.X, pady=(14, 4))
-        tk.Label(sm, text=f"  SUMA DNIA:  Razem {grand['total']}   "
-                          f"PASS {grand['pass']}   FAIL {grand['fail']}",
-                 bg="#263238", fg="white",
-                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=15, pady=8)
-
-    def load_daily_async(day):
-        if state2["busy"]:
-            return
-        state2["busy"] = True
-        for w in scroll_daily.winfo_children():
-            w.destroy()
-        tk.Label(scroll_daily, text="Wczytywanie...", bg=config.COLOR_BG,
-                 fg="#888", font=("Arial", 11)).pack(pady=30)
-
-        def worker():
-            data = load_daily(day)
-            state2["busy"] = False
+        def poll():
             try:
-                if win.winfo_exists():
-                    win.after(0, lambda: render_daily(day, data))
+                if not win.winfo_exists():
+                    return
             except Exception:
-                pass
-        threading.Thread(target=worker, daemon=True).start()
+                return
+            if th.is_alive():
+                win.after(100, poll)
+                return
+            if "e" in holder:
+                status.config(text=f"✗ Brak dostępu do statystyk: {holder['e']}", fg=C_ERR)
+                return
+            state["result"] = holder["r"]
+            status.config(text=f"Katalog: {stats_dir}   |   wpisów: {len(holder['r'])}", fg="#666")
+            render()
+        poll()
 
-    def change_daily(delta):
-        state2["day"] = state2["day"] + td(days=delta)
-        load_daily_async(state2["day"])
-
-    tk.Button(nav2, text="◀ Poprzedni", bg="#607D8B", fg="white",
-              font=("Arial", 9), relief=tk.FLAT, cursor="hand2",
-              command=lambda: change_daily(-1)).pack(side=tk.LEFT, padx=4)
-    tk.Button(nav2, text="Następny ▶", bg="#607D8B", fg="white",
-              font=("Arial", 9), relief=tk.FLAT, cursor="hand2",
-              command=lambda: change_daily(1)).pack(side=tk.LEFT, padx=4)
-
-    load_shifts(state["day"])
-    load_daily_async(state2["day"])
+    load()

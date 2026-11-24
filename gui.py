@@ -5,7 +5,7 @@ from tkinter import messagebox, ttk
 
 from config import APP_NAME, APP_VERSION
 from models import PowerSupplyModels
-from stats_manager import StatsManager
+from stats_store import StatsRecorder
 
 
 class ComboTesterApp:
@@ -21,7 +21,10 @@ class ComboTesterApp:
 
     def _make_stats(self):
         try:
-            return StatsManager(log_dir=self.config.resolve_log_dir())
+            from app_paths import app_dir
+            sdir = self.config.resolve_stats_dir()
+            outbox = sdir if self.config.SIMULATION else app_dir()   # symulacja nie miesza skrzynek
+            return StatsRecorder(sdir, self.config.station, outbox)
         except Exception as e:
             print(f"[STATS] Nie udało się zainicjować statystyk: {e}")
             return None
@@ -45,7 +48,7 @@ class ComboTesterApp:
     def close_application(self):
         if self.stats:
             try:
-                self.stats.flush()
+                self.stats.stop()          # dokończ zapis kolejki (max 3 s)
             except Exception:
                 pass
         try:
@@ -98,13 +101,15 @@ class ComboTesterApp:
         self._after_eng_changes()
 
     def _after_eng_changes(self):
-        if self.stats is None:
+        # Zmiana katalogu statystyk / nazwy stanowiska w ENG -> nowy rejestrator
+        st = self.stats
+        if st is None or st.stats_dir != self.config.resolve_stats_dir() or st.station != self.config.station:
+            if st is not None:
+                try:
+                    st.stop()
+                except Exception:
+                    pass
             self.stats = self._make_stats()
-        else:
-            try:
-                self.stats.set_log_dir(self.config.resolve_log_dir())
-            except Exception as e:
-                print(f"[STATS] Nie udało się przełączyć ścieżki: {e}")
         try:
             if self.model_combo.winfo_exists():
                 self.model_combo["values"] = PowerSupplyModels.get_all_models(enabled_only=True)
@@ -188,7 +193,7 @@ class ComboTesterApp:
         dialog.transient(self.root)
         dialog.grab_set()
         devices = str(info.get("devices", "") or "").strip()
-        w, h = 600, 300 + (30 if devices else 0) + (25 if len(devices) > 55 else 0)
+        w, h = 600, 300 + (18 if len(devices) > 80 else 0)
         x = self.root.winfo_screenwidth() // 2 - w // 2
         y = self.root.winfo_screenheight() // 2 - h // 2
         dialog.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
@@ -198,26 +203,32 @@ class ComboTesterApp:
                  fg=c.COLOR_PRIMARY, font=("Arial", 16, "bold")).pack(pady=(24, 6))
         tk.Label(dialog, text=model_key, bg=c.COLOR_WHITE, fg=c.COLOR_ACCENT,
                  font=("Arial", 24, "bold")).pack(pady=(0, 2))
-        if devices:
-            tk.Label(dialog, text=f"Urządzenia: {devices}", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
-                     font=("Arial", 12, "bold"), wraplength=w - 60, justify="center").pack(pady=(0, 6))
         desc = info.get("description", "")
-        if desc and desc != model_key:
-            tk.Label(dialog, text=desc, bg=c.COLOR_WHITE, fg="#666666",
-                     font=("Arial", 10)).pack(pady=(0, 8))
+        # Pod PN: lista urządzeń (mały szary napis); opis tylko gdy profil nie ma listy urządzeń.
+        sub = f"Urządzenia: {devices}" if devices else (desc if desc != model_key else "")
+        if sub:
+            tk.Label(dialog, text=sub, bg=c.COLOR_WHITE, fg="#666666", font=("Arial", 10),
+                     wraplength=w - 60, justify="center").pack(pady=(0, 8))
 
         p, ld = info.get("test_params", {}), info.get("load_params", {})
+
+        def param_line(label, color, value, pady):
+            row = tk.Frame(dialog, bg=c.COLOR_WHITE)
+            row.pack(pady=pady)
+            tk.Label(row, text=label, bg=c.COLOR_WHITE, fg=color,
+                     font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+            tk.Label(row, text=value, bg=c.COLOR_WHITE, fg="#111111",
+                     font=("Arial", 11)).pack(side=tk.LEFT, padx=(6, 0))
+
         if ld.get("enabled"):
-            load_txt = (f"1. OBCIĄŻENIE:  {ld.get('v_min')}-{ld.get('v_max')} V   "
-                        f"przy {ld.get('i_min')} A i {ld.get('i_max')} A")
+            param_line("1. OBCIĄŻENIE:", "#1565C0",
+                       f"{ld.get('v_min')}-{ld.get('v_max')} V   przy {ld.get('i_min')} A i {ld.get('i_max')} A",
+                       (0, 4))
         else:
-            load_txt = "OBCIĄŻENIE:  wyłączone w profilu (tylko Hi-Pot)"
-        tk.Label(dialog, text=load_txt, bg=c.COLOR_WHITE, fg="#333333",
-                 font=("Arial", 11, "bold")).pack(pady=(0, 4))
-        tk.Label(dialog, text=f"{'2. ' if ld.get('enabled') else ''}HI-POT:  {p.get('mode', '?')}  "
-                              f"{p.get('voltage', '?')} V   "
-                              f"limit {p.get('current_limit_low', '?')}-{p.get('current_limit_high', '?')} mA",
-                 bg=c.COLOR_WHITE, fg="#333333", font=("Arial", 11, "bold")).pack(pady=(0, 8))
+            param_line("OBCIĄŻENIE:", "#1565C0", "wyłączone w profilu (tylko Hi-Pot)", (0, 4))
+        param_line(f"{'2. ' if ld.get('enabled') else ''}HI-POT:", "#C62828",
+                   f"{p.get('mode', '?')}  {p.get('voltage', '?')} V   "
+                   f"limit {p.get('current_limit_low', '?')}-{p.get('current_limit_high', '?')} mA", (0, 8))
         tk.Frame(dialog, bg="#dddddd", height=1).pack(fill=tk.X, padx=30, pady=(0, 16))
 
         bf = tk.Frame(dialog, bg=c.COLOR_WHITE)
