@@ -1,11 +1,11 @@
 # shift_stats.py
 """
-Statystyki zmiany produkcyjnej — per operator (HRID).
+Statystyki zmiany produkcyjnej - per operator (HRID).
 
 Zmiana wyznaczana z bieżącej godziny:
-    I   → 06:00 – 13:59
-    II  → 14:00 – 21:59
-    III → 22:00 – 05:59 (przez noc)
+    I   → 06:00 - 13:59
+    II  → 14:00 - 21:59
+    III → 22:00 - 05:59 (przez noc)
 
 Stan przechowywany w pliku:
     <LOG_DIR>\\Shift Reports\\<HRID>\\shift_<nr>_<RRRR-MM-DD>.txt
@@ -13,14 +13,14 @@ Stan przechowywany w pliku:
 Zmiany względem wersji pierwotnej (klasa mieszkała w test_screen.py):
   * rozdzielenie licznika na "wczytane z pliku" (base) i "dorobione w tej
     sesji" (delta). Wcześniej wątek wczytujący nadpisywał liczniki
-    wartościami z pliku — testy wykonane zanim wczytywanie się skończyło
+    wartościami z pliku - testy wykonane zanim wczytywanie się skończyło
     (typowe na wolnym dysku sieciowym) po prostu znikały;
-  * zapis do pliku jest wstrzymany do końca wczytywania — wcześniej
+  * zapis do pliku jest wstrzymany do końca wczytywania - wcześniej
     pierwszy test po starcie potrafił nadpisać plik zmiany wartością "1",
     kasując dorobek całej zmiany;
   * przełom zmiany wczytuje plik nowej zmiany zamiast zerować liczniki
     (drugie stanowisko / druga sesja tego samego HRID nie jest kasowana);
-  * zapis atomowy (tmp + replace) — plik nie zostaje ucięty przy zaniku
+  * zapis atomowy (tmp + replace) - plik nie zostaje ucięty przy zaniku
     sieci;
   * brak dostępu do dysku sieciowego nie wywala ekranu testu.
 """
@@ -34,7 +34,7 @@ from typing import Optional
 SHIFTS = [
     (1, "I",   6,  14),   # (numer, nazwa, start_h, end_h)
     (2, "II",  14, 22),
-    (3, "III", 22, 6),    # nocna — end_h < start_h
+    (3, "III", 22, 6),    # nocna - end_h < start_h
 ]
 
 SHIFT_REPORTS_SUBDIR = "Shift Reports"
@@ -62,12 +62,12 @@ def get_current_shift(now: Optional[datetime] = None):
                 end   = datetime(today.year, today.month, today.day, e)
                 return num, name, start, end
         else:                                       # zmiana nocna
-            if h >= s:                              # 22:00–23:59
+            if h >= s:                              # 22:00-23:59
                 tomorrow = today + timedelta(days=1)
                 start = datetime(today.year, today.month, today.day, s)
                 end   = datetime(tomorrow.year, tomorrow.month, tomorrow.day, e)
                 return num, name, start, end
-            if h < e:                               # 00:00–05:59
+            if h < e:                               # 00:00-05:59
                 yesterday = today - timedelta(days=1)
                 start = datetime(yesterday.year, yesterday.month, yesterday.day, s)
                 end   = datetime(today.year, today.month, today.day, e)
@@ -182,7 +182,7 @@ class ShiftStats:
 
     @staticmethod
     def _safe_name(name: str) -> str:
-        """HRID trafia do nazwy katalogu — odetnij znaki niedozwolone w NTFS."""
+        """HRID trafia do nazwy katalogu - odetnij znaki niedozwolone w NTFS."""
         return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)[:64] or "UNKNOWN"
 
     def _make_filepath(self) -> str:
@@ -225,7 +225,7 @@ class ShiftStats:
             self._base_models = models
             self._loaded = True
 
-        # Jeśli w międzyczasie doszły wyniki — dopiero teraz można zapisać.
+        # Jeśli w międzyczasie doszły wyniki - dopiero teraz można zapisać.
         if self._delta["pass"] or self._delta["fail"] or self._delta["retest"]:
             self._save_to_file()
 
@@ -254,7 +254,7 @@ class ShiftStats:
             hours = ""
             if snapshot["shift_start"] and snapshot["shift_end"]:
                 hours = (f"{snapshot['shift_start'].strftime('%H:%M')}"
-                         f"–{snapshot['shift_end'].strftime('%H:%M')}")
+                         f"-{snapshot['shift_end'].strftime('%H:%M')}")
 
             lines = [
                 f"HRID:       {self.operator}",
@@ -366,6 +366,6 @@ class ShiftStats:
             return self._snapshot_locked()
 
     def stop(self):
-        """Odpina callback — zapobiega odwołaniom do zniszczonych widgetów."""
+        """Odpina callback - zapobiega odwołaniom do zniszczonych widgetów."""
         self._stopped = True
         self.on_rebuilt = None

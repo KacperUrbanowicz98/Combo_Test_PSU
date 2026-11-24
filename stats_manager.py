@@ -1,6 +1,6 @@
 # stats_manager.py
 """
-Statystyki dzienne — źródłem prawdy są pliki TXT w LOG_DIR.
+Statystyki dzienne - źródłem prawdy są pliki TXT w LOG_DIR.
 
 Zmiany względem wersji pierwotnej:
   * count_today() nie otwiera już przy każdym wywołaniu wszystkich plików
@@ -8,10 +8,10 @@ Zmiany względem wersji pierwotnej:
     zapisywane raz i nie zmieniają się), a samo skanowanie katalogu jest
     dławione. Na udziale sieciowym z kilkoma tysiącami plików poprzednia
     wersja blokowała GUI na kilka sekund po KAŻDYM teście;
-  * count_today_async() — wersja do wołania z wątku roboczego;
+  * count_today_async() - wersja do wołania z wątku roboczego;
   * konstruktor nie tworzy katalogów (niedostępny dysk sieciowy wywalał
     całą aplikację przy starcie); katalog powstaje przy pierwszym zapisie;
-  * set_log_dir() — zmiana ścieżki w panelu administratora działa bez
+  * set_log_dir() - zmiana ścieżki w panelu administratora działa bez
     restartu aplikacji.
 """
 import json
@@ -121,7 +121,7 @@ class StatsManager:
         return {}
 
     def _save(self, data: dict, for_date: Optional[date] = None) -> bool:
-        """Atomowy zapis — bezpieczny przy kilku stanowiskach na tym samym udziale."""
+        """Atomowy zapis - bezpieczny przy kilku stanowiskach na tym samym udziale."""
         if not self._ensure_stats_dir():
             return False
         path = self._stats_path(for_date)
@@ -180,7 +180,7 @@ class StatsManager:
 
         ok = self._save(data, target_date)
 
-        # Nowy plik wyniku pojawi się w katalogu — wymuś świeży skan.
+        # Nowy plik wyniku pojawi się w katalogu - wymuś świeży skan.
         with self._cache_lock:
             self._last_scan = 0.0
         return ok
@@ -198,7 +198,7 @@ class StatsManager:
         return self.session_pass + self.session_fail
 
     # ------------------------------------------------------------------ #
-    # GŁÓWNY LICZNIK — czyta z plików TXT                                 #
+    # GŁÓWNY LICZNIK - czyta z plików TXT                                 #
     # ------------------------------------------------------------------ #
     def count_today(self, force: bool = False) -> dict:
         """
@@ -229,7 +229,7 @@ class StatsManager:
     def count_today_async(self, callback):
         """
         Skanuje w wątku tła i woła callback(dict).
-        Callback NIE jest wołany z wątku GUI — użyj root.after().
+        Callback NIE jest wołany z wątku GUI - użyj root.after().
         """
         with self._cache_lock:
             if self._scanning:

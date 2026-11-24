@@ -27,7 +27,7 @@ class ComboTesterApp:
             return None
 
     def _setup_window(self):
-        title = self.config.WINDOW_TITLE + (" — SYMULACJA" if self.config.SIMULATION else "")
+        title = self.config.WINDOW_TITLE + (" - SYMULACJA" if self.config.SIMULATION else "")
         self.root.title(title)
         try:
             self.root.state("zoomed")
@@ -157,7 +157,7 @@ class ComboTesterApp:
         self.confirm_button.pack(pady=(10, 30), padx=50)
         self._transition_pending = False
         if not self.model_combo["values"]:
-            self.scan_status_label.config(text="Brak włączonych profili — włącz je w panelu ENG",
+            self.scan_status_label.config(text="Brak włączonych profili - włącz je w panelu ENG",
                                           fg=c.COLOR_ERROR)
 
     def _reset_scan(self):
@@ -187,7 +187,8 @@ class ComboTesterApp:
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
-        w, h = 560, 380
+        devices = str(info.get("devices", "") or "").strip()
+        w, h = 600, 300 + (30 if devices else 0) + (25 if len(devices) > 55 else 0)
         x = self.root.winfo_screenwidth() // 2 - w // 2
         y = self.root.winfo_screenheight() // 2 - h // 2
         dialog.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
@@ -196,7 +197,10 @@ class ComboTesterApp:
         tk.Label(dialog, text="Czy wybrano prawidłowy profil?", bg=c.COLOR_WHITE,
                  fg=c.COLOR_PRIMARY, font=("Arial", 16, "bold")).pack(pady=(24, 6))
         tk.Label(dialog, text=model_key, bg=c.COLOR_WHITE, fg=c.COLOR_ACCENT,
-                 font=("Arial", 24, "bold")).pack(pady=(0, 4))
+                 font=("Arial", 24, "bold")).pack(pady=(0, 2))
+        if devices:
+            tk.Label(dialog, text=f"Urządzenia: {devices}", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
+                     font=("Arial", 12, "bold"), wraplength=w - 60, justify="center").pack(pady=(0, 6))
         desc = info.get("description", "")
         if desc and desc != model_key:
             tk.Label(dialog, text=desc, bg=c.COLOR_WHITE, fg="#666666",
@@ -204,7 +208,7 @@ class ComboTesterApp:
 
         p, ld = info.get("test_params", {}), info.get("load_params", {})
         if ld.get("enabled"):
-            load_txt = (f"1. OBCIĄŻENIE:  {ld.get('v_min')}–{ld.get('v_max')} V   "
+            load_txt = (f"1. OBCIĄŻENIE:  {ld.get('v_min')}-{ld.get('v_max')} V   "
                         f"przy {ld.get('i_min')} A i {ld.get('i_max')} A")
         else:
             load_txt = "OBCIĄŻENIE:  wyłączone w profilu (tylko Hi-Pot)"
@@ -212,7 +216,7 @@ class ComboTesterApp:
                  font=("Arial", 11, "bold")).pack(pady=(0, 4))
         tk.Label(dialog, text=f"{'2. ' if ld.get('enabled') else ''}HI-POT:  {p.get('mode', '?')}  "
                               f"{p.get('voltage', '?')} V   "
-                              f"limit {p.get('current_limit_low', '?')}–{p.get('current_limit_high', '?')} mA",
+                              f"limit {p.get('current_limit_low', '?')}-{p.get('current_limit_high', '?')} mA",
                  bg=c.COLOR_WHITE, fg="#333333", font=("Arial", 11, "bold")).pack(pady=(0, 8))
         tk.Frame(dialog, bg="#dddddd", height=1).pack(fill=tk.X, padx=30, pady=(0, 16))
 
@@ -265,12 +269,12 @@ class ComboTesterApp:
             return
         info = PowerSupplyModels.get_model_info(key)
         if not info:
-            self.scan_status_label.config(text="✗ Profil zniknął — odśwież listę", fg=c.COLOR_ERROR)
+            self.scan_status_label.config(text="✗ Profil zniknął - odśwież listę", fg=c.COLOR_ERROR)
             return
         self._transition_pending = True
         self.confirm_button.config(state="disabled", bg="#AAAAAA")
         self.serial_entry.config(state="disabled")
-        self.scan_status_label.config(text=f"✓ Profil: {key} | SN: {len(serial)} znaków — OK",
+        self.scan_status_label.config(text=f"✓ Profil: {key} | SN: {len(serial)} znaków - OK",
                                       fg=c.COLOR_ACCENT)
         self.root.after(500, lambda: self._show_test_screen(serial, {"model_key": key, **info}))
 

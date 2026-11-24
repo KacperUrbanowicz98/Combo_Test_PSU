@@ -1,10 +1,10 @@
 # create_exe.py
 """
-Budowa "Combo Test PSU.exe" (PyInstaller, --onedir --windowed) — jak w Hi-Pot PSU.
+Budowa "Combo Test PSU.exe" (PyInstaller, --onedir --windowed) - jak w Hi-Pot PSU.
 
   pip install pyserial pyinstaller
   python create_exe.py
-Wynik: dist/Combo Test PSU/  (kopiować CAŁY folder — config.json i models.json
+Wynik: dist/Combo Test PSU/  (kopiować CAŁY folder - config.json i models.json
 powstają obok .exe).
 """
 import os
@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 APP = "Combo Test PSU"
-VERSION = (1, 1, 0, 0)
+VERSION = (1, 1, 1, 0)
 MODULES = ["app_paths", "config", "settings_manager", "auth", "models", "gui", "test_screen",
            "stats_window", "eng_panel", "hipot_device", "hipot_runner", "result_validator",
            "interlock", "relay", "load_tester", "combo_sequence", "oel85", "transport", "simulator",
@@ -51,7 +51,7 @@ def main():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
     if not os.path.exists("main.py"):
-        print("[!] BRAK PLIKU: main.py — uruchom w folderze projektu")
+        print("[!] BRAK PLIKU: main.py - uruchom w folderze projektu")
         input("\nNaciśnij Enter aby wyjść...")
         sys.exit(1)
 
@@ -60,9 +60,9 @@ def main():
     for f in ("models.json", "config.json"):
         if os.path.exists(f):
             extra += ["--add-data", f"{os.path.abspath(f)}{sep}."]
-            print(f"[+] {f} — spakowany jako wzorzec")
+            print(f"[+] {f} - spakowany jako wzorzec")
         else:
-            print(f"[~] Brak {f} — powstanie przy pierwszym uruchomieniu")
+            print(f"[~] Brak {f} - powstanie przy pierwszym uruchomieniu")
 
     create_version_file()
     print("\n" + "=" * 55 + f"\n  {APP} - Builder EXE\n" + "=" * 55)
@@ -84,9 +84,9 @@ def main():
         print(f"[+] SUKCES: {os.path.abspath(exe)}")
         print(f"[!] Kopiuj cały folder 'dist/{APP}', nie sam .exe!")
     elif r.returncode == 0:
-        print(f"[+] Build zakończony — szukaj w dist/{APP}/")
+        print(f"[+] Build zakończony - szukaj w dist/{APP}/")
     else:
-        print(f"[!] BŁĄD budowania (kod {r.returncode}) — zobacz build/{APP}/warn-{APP}.txt")
+        print(f"[!] BŁĄD budowania (kod {r.returncode}) - zobacz build/{APP}/warn-{APP}.txt")
     print("=" * 55)
     input("\nNaciśnij Enter aby zamknąć...")
 

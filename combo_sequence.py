@@ -15,9 +15,9 @@ Sekwencja testu stanowiska (v1.1.0): OBCIĄŻENIE -> Hi-Pot.
   6. ZAWSZE po Hi-Pot (także przy przerwaniu): STOP, odczekanie HV_DISCHARGE_S,
      przekaźnik 'load'
 
-Wątek przerywający (STOP / klapa) nigdy nie wysyła komend do przekaźnika —
+Wątek przerywający (STOP / klapa) nigdy nie wysyła komend do przekaźnika -
 robi to wyłącznie ta sekwencja, po wyłączeniu HV.
-Bez Tk — używane przez ekran testu i test w pętli z panelu ENG.
+Bez Tk - używane przez ekran testu i test w pętli z panelu ENG.
 """
 import threading
 import time
@@ -40,7 +40,7 @@ def hipot_fits(cfg, test_params: dict):
     need = total_time(test_params)
     if need > window:
         return False, (f"Hi-Pot w profilu trwa {need:.1f} s, a przekaźnik wraca do 'load' po "
-                       f"{float(cfg.RELAY_REVERT_S):.0f} s — skróć czasy Hi-Pot w profilu "
+                       f"{float(cfg.RELAY_REVERT_S):.0f} s - skróć czasy Hi-Pot w profilu "
                        f"(maks. {max(0.0, window):.1f} s)")
     return True, ""
 
@@ -125,12 +125,12 @@ class ComboSequence:
         return "Otwarto klapę w trakcie testu" if st is False else "Utracono sygnał klapy (interlock)"
 
     def _watch_lid(self):
-        """Nasłuch klapy przez cały test — otwarcie przerywa test natychmiast."""
+        """Nasłuch klapy przez cały test - otwarcie przerywa test natychmiast."""
         while not self._watch_stop.wait(0.05):
             why = self._lid_state_bad()
             if why:
                 self.lid_reason = why
-                print(f"[SEQ] {why} — przerwanie testu")
+                print(f"[SEQ] {why} - przerwanie testu")
                 self.abort.set()
                 if self.oel is not None:
                     try:
@@ -158,14 +158,14 @@ class ComboSequence:
         r = ComboResult()
         r.load_status = SKIP if self.load_enabled else "OFF"
         if self.relay is None:
-            r.reason = "Brak połączenia z przekaźnikiem — test zablokowany"
+            r.reason = "Brak połączenia z przekaźnikiem - test zablokowany"
             return r
         why = self._lid_state_bad()
         if why:
-            r.reason = "Klapa otwarta — zamknij klapę" if "Otwarto" in why else why
+            r.reason = "Klapa otwarta - zamknij klapę" if "Otwarto" in why else why
             return r
         fits, why = hipot_fits(self.cfg, self.profile["test_params"])
-        if not fits:                    # przed obciążeniem — nie podajemy 230 V na darmo
+        if not fits:                    # przed obciążeniem - nie podajemy 230 V na darmo
             r.reason, r.hipot_skipped = why, "za długi"
             return r
         watcher = None

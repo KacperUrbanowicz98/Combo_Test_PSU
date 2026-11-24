@@ -3,13 +3,13 @@
 Moduł komunikacji z urządzeniem Hi-Pot Chroma (RS232 / SCPI).
 
 Zmiany względem wersji pierwotnej:
-  * cały dostęp do portu jest serializowany blokadą — wcześniej wątek testu
+  * cały dostęp do portu jest serializowany blokadą - wcześniej wątek testu
     (odczyt pomiarów) i wątek GUI (przycisk STOP / otwarcie klapy) pisały do
     portu jednocześnie, co mieszało ramki i dawało losowe odpowiedzi;
   * nieudane connect() nie zostawia otwartego portu (wcześniej port zostawał
     zablokowany aż do restartu aplikacji);
   * kod oceny wyniku parsowany liczbowo, nie porównaniem tekstu;
-  * licznik błędów komunikacji — pozwala odróżnić "test trwa" od "zerwany kabel".
+  * licznik błędów komunikacji - pozwala odróżnić "test trwa" od "zerwany kabel".
 """
 import threading
 import time
@@ -24,7 +24,7 @@ PASS_JUDGMENT_CODE = 116
 _FINISHED_TOKENS = ("STOP", "PASS", "FAIL", "READY", "OFF")
 
 # Zwracane przez get_status(), gdy urządzenie w ogóle nie odpowiedziało.
-# Wcześniej był to "TESTING" — przez co brak odpowiedzi wyglądał tak samo
+# Wcześniej był to "TESTING" - przez co brak odpowiedzi wyglądał tak samo
 # jak potwierdzony test w toku.
 STATUS_NO_RESPONSE = "NO_RESPONSE"
 
@@ -32,7 +32,7 @@ STATUS_NO_RESPONSE = "NO_RESPONSE"
 def fmt_num(value) -> str:
     """
     Liczba dla SCPI bez notacji wykładniczej.
-    str(0.01 / 1000) daje '1e-05' — nie każdy firmware Chromy to przyjmuje,
+    str(0.01 / 1000) daje '1e-05' - nie każdy firmware Chromy to przyjmuje,
     a odrzucona komenda LIMit:LOW zostawiała w urządzeniu stary limit (np. 0).
     """
     s = f"{float(value):.7f}".rstrip("0").rstrip(".")
@@ -78,7 +78,7 @@ class ChromaHiPotDevice:
 
                 response = self.query("*IDN?")
                 if not response:
-                    print("[HIPOT] Brak odpowiedzi na *IDN? — rozłączam")
+                    print("[HIPOT] Brak odpowiedzi na *IDN? - rozłączam")
                     self._force_close()
                     return False
 
@@ -98,7 +98,7 @@ class ChromaHiPotDevice:
                 return False
 
     def _force_close(self):
-        """Zamyka port bezwarunkowo — bez wysyłania czegokolwiek."""
+        """Zamyka port bezwarunkowo - bez wysyłania czegokolwiek."""
         if self.serial is not None:
             try:
                 if self.serial.is_open:
@@ -179,7 +179,7 @@ class ChromaHiPotDevice:
 
     @staticmethod
     def _parse(response: Optional[str]) -> list:
-        """Parsuje odpowiedź Chromy — separator może być ; lub ,"""
+        """Parsuje odpowiedź Chromy - separator może być ; lub ,"""
         if not response:
             return []
         sep = ";" if ";" in response else ","
@@ -220,7 +220,7 @@ class ChromaHiPotDevice:
             else:
                 raise ValueError(f"Nieobsługiwany tryb testu: {mode}")
 
-            # Sprawdzamy CAŁĄ kolejkę błędów — wcześniej czytany był tylko
+            # Sprawdzamy CAŁĄ kolejkę błędów - wcześniej czytany był tylko
             # pierwszy wpis, więc odrzucony LIMit:LOW mógł przejść niezauważony.
             errors = self._drain_errors()
             if errors:
@@ -248,7 +248,7 @@ class ChromaHiPotDevice:
         """
         Odczyt zwrotny napięcia i limitów prądu z Chromy.
         Rozbieżność = konfiguracja nieudana (test zostanie zablokowany).
-        Brak odpowiedzi na zapytanie (firmware go nie obsługuje) — tylko
+        Brak odpowiedzi na zapytanie (firmware go nie obsługuje) - tylko
         ostrzeżenie w konsoli; wtedy chroni nas kontrola wyniku w aplikacji.
         """
         checks = (
@@ -261,22 +261,22 @@ class ChromaHiPotDevice:
             resp = self.query(f"SAFEty:STEP{step}:{mode}:{key}?")
             parts = self._parse(resp)
             if not parts:
-                print(f"[HIPOT] Odczyt zwrotny {key}: brak odpowiedzi — pomijam")
+                print(f"[HIPOT] Odczyt zwrotny {key}: brak odpowiedzi - pomijam")
                 continue
             try:
                 actual = float(parts[0])
             except ValueError:
-                print(f"[HIPOT] Odczyt zwrotny {key}: nieczytelne '{resp}' — pomijam")
+                print(f"[HIPOT] Odczyt zwrotny {key}: nieczytelne '{resp}' - pomijam")
                 continue
             expected = float(expected)
-            # Firmware może odpowiadać w innej jednostce (V/kV, A/mA) —
+            # Firmware może odpowiadać w innej jednostce (V/kV, A/mA) -
             # wartość przeskalowana o 1000 też potwierdza poprawne ustawienie.
             matched = any(
                 abs(actual - expected * k) <= max(abs(expected * k) * 0.02, 1e-7)
                 for k in (1.0, 1000.0, 0.001))
             if not matched:
                 print(f"[HIPOT] Odczyt zwrotny {key}: ustawiono {expected}, "
-                      f"urządzenie ma {actual} — BŁĄD KONFIGURACJI")
+                      f"urządzenie ma {actual} - BŁĄD KONFIGURACJI")
                 ok = False
             else:
                 print(f"[HIPOT] Odczyt zwrotny {key}: {actual} OK")
@@ -289,7 +289,7 @@ class ChromaHiPotDevice:
         try:
             return int(float(first)) == 0
         except (TypeError, ValueError):
-            return True     # nieznany format — nie blokuj pracy
+            return True     # nieznany format - nie blokuj pracy
 
     # ------------------------------------------------------------------ #
     # STEROWANIE TESTEM                                                   #
@@ -297,7 +297,7 @@ class ChromaHiPotDevice:
     def start_test(self) -> Tuple[bool, str]:
         """
         Zwraca (ok, komunikat). Wcześniej metoda zwracała samo True/False,
-        a wynik i tak był ignorowany przez wywołującego — test "startował"
+        a wynik i tak był ignorowany przez wywołującego - test "startował"
         nawet gdy Chroma odrzuciła komendę i GUI wisiało do timeoutu.
         """
         try:
@@ -308,7 +308,7 @@ class ChromaHiPotDevice:
                 err = self.query("SYST:ERR?")
             print(f"[HIPOT] START → SYST:ERR? = '{err}'")
             if err and "-203" in str(err):
-                return False, "Urządzenie zablokowane (błąd -203) — sprawdź klapę/keylock."
+                return False, "Urządzenie zablokowane (błąd -203) - sprawdź klapę/keylock."
             if err and not self._error_is_ok(err):
                 return False, f"Urządzenie odrzuciło START: {err}"
             return True, ""
@@ -343,7 +343,7 @@ class ChromaHiPotDevice:
             for token in _FINISHED_TOKENS + ("TESTING", "RUNNING", "WAIT"):
                 if token in s:
                     return token
-            print(f"[HIPOT] Nieznany status: '{response}' — traktuję jako TESTING")
+            print(f"[HIPOT] Nieznany status: '{response}' - traktuję jako TESTING")
             return "TESTING"
         except Exception as e:
             print(f"[HIPOT] Błąd pobierania statusu: {e}")
@@ -465,7 +465,7 @@ class ChromaHiPotDevice:
         print(f"\n[1] Łączenie z {port}...")
         self.port = port
         if not self.connect():
-            print("    STOP — brak połączenia")
+            print("    STOP - brak połączenia")
             return
 
         print(f"\n[2] *IDN?           '{self.query('*IDN?')}'")

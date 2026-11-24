@@ -12,7 +12,7 @@ Nowe:
   * dwa warianty widoku: oba testy na ekranie / jeden po drugim (ENG -> Ogólne),
   * status połączeń: Chroma, OEL8512, Interlock, Przekaźnik + aktualna pozycja przekaźnika,
   * historia 5 ostatnich wyników z wynikiem Hi-Pot, obciążenia i całkowitym,
-  * bez logowania HRID — w statystykach nazwa stanowiska.
+  * bez logowania HRID - w statystykach nazwa stanowiska.
 """
 import os
 import queue
@@ -30,7 +30,7 @@ from shift_stats import ShiftStats
 
 C_OK, C_ERR, C_WARN, C_IDLE = "#4CAF50", "#f44336", "#FF9800", "#9E9E9E"
 STATUS_TXT = {PASS: "PASS", FAIL: "FAIL", INVALID: "NIEWAŻNY", ABORTED: "PRZERWANY",
-              SKIP: "—", "OFF": "wył."}
+              SKIP: "-", "OFF": "wył."}
 
 
 def _status_color(s):
@@ -265,7 +265,7 @@ class TestScreen:
                           font=("Arial", 10, "bold"), padx=6)
             lb.pack(side=tk.LEFT)
             self.badges[key] = (lb, label)
-        self.relay_label = tk.Label(right, text="Przekaźnik: —", bg="#ECEFF1", fg="#333",
+        self.relay_label = tk.Label(right, text="Przekaźnik: -", bg="#ECEFF1", fg="#333",
                                     font=("Arial", 10, "bold"), padx=8, pady=2)
         self.relay_label.pack(side=tk.LEFT, padx=(10, 0))
 
@@ -291,17 +291,17 @@ class TestScreen:
         tk.Label(g, text="OBCIĄŻENIE", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
                  font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 12))
         if self.load_enabled:
-            item(0, 1, "Okno V:", f"{ld['v_min']}–{ld['v_max']} V")
+            item(0, 1, "Okno V:", f"{ld['v_min']}-{ld['v_max']} V")
             item(0, 3, "Punkty CC:", f"{ld['i_min']} A / {ld['i_max']} A")
             item(0, 5, "Nominal:", f"{ld.get('v_nominal', '?')} V")
             item(0, 7, "Ustalanie:", f"{ld.get('power_on_delay', 2)} s + {ld.get('settle_time', 1)} s/pkt")
         else:
-            item(0, 1, "", "wyłączone w profilu — tylko Hi-Pot")
+            item(0, 1, "", "wyłączone w profilu - tylko Hi-Pot")
         tk.Label(g, text="HI-POT", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
                  font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 12))
         item(1, 1, "Tryb:", p["mode"])
         item(1, 3, "Napięcie:", f"{p['voltage']} V ±{p.get('voltage_tolerance', 0)} V")
-        item(1, 5, "Prąd:", f"{p['current_limit_low']}–{p['current_limit_high']} mA")
+        item(1, 5, "Prąd:", f"{p['current_limit_low']}-{p['current_limit_high']} mA")
         item(1, 7, "Czas:", f"{hipot_runner.total_time(p):g} s")
 
     # ---------------------------- panele na żywo ----------------------- #
@@ -317,7 +317,7 @@ class TestScreen:
             self.step_label.pack(anchor="w")
 
         n_hp = "2. HI-POT" if self.load_enabled else "HI-POT"
-        self.ld_panel = self._make_panel("1. OBCIĄŻENIE", [("PUNKT", "ld_pt", "—"),
+        self.ld_panel = self._make_panel("1. OBCIĄŻENIE", [("PUNKT", "ld_pt", "-"),
                                                            ("NAPIĘCIE", "ld_v", "0.000 V"),
                                                            ("PRĄD", "ld_i", "0.000 A"),
                                                            ("MOC", "ld_p", "0.00 W")])
@@ -328,7 +328,7 @@ class TestScreen:
         pt.pack(pady=(0, 8))
         self.point_labels = {}
         for col, name in enumerate(("MIN", "MAX")):
-            lb = tk.Label(pt, text=f"{name}: —", bg="#ECEFF1", fg="#555", font=("Arial", 10, "bold"),
+            lb = tk.Label(pt, text=f"{name}: -", bg="#ECEFF1", fg="#555", font=("Arial", 10, "bold"),
                           padx=10, pady=3, width=34)
             lb.grid(row=0, column=col, padx=4)
             self.point_labels[name] = lb
@@ -363,7 +363,7 @@ class TestScreen:
         return f
 
     def _layout_panels(self, active: str):
-        """Wariant 'both' — obok siebie; 'sequential' — tylko aktywny test."""
+        """Wariant 'both' - obok siebie; 'sequential' - tylko aktywny test."""
         for p in (self.hp_panel, self.ld_panel):
             p.pack_forget()
         if not self.seq_mode:
@@ -521,7 +521,7 @@ class TestScreen:
         if not self.shift_stats:
             return
         s = self.shift_stats.get_snapshot()
-        hours = (f" {s['shift_start']:%H:%M}–{s['shift_end']:%H:%M}"
+        hours = (f" {s['shift_start']:%H:%M}-{s['shift_end']:%H:%M}"
                  if s.get("shift_start") and s.get("shift_end") else "")
         self._cfg(self.lbl_shift, text=f"Zmiana {s['shift_name']}{hours}")
         self._cfg(self.lbl_total, text=str(s["total"]))
@@ -610,7 +610,7 @@ class TestScreen:
             self._badge("chroma", "ok")
         else:
             self._badge("chroma", "err")
-            msg = ("✗ Konfiguracja Hi-Pot nie powiodła się — test ZABLOKOWANY" if ok
+            msg = ("✗ Konfiguracja Hi-Pot nie powiodła się - test ZABLOKOWANY" if ok
                    else f"✗ Brak połączenia z Chroma ({self.config.DEFAULT_COM_PORT})")
             self._cfg(self.status_label, text=msg, fg=C_ERR)
 
@@ -626,7 +626,7 @@ class TestScreen:
         self._badge("relay", "ok" if self._relay_ok else "err")
         if not cfg.INTERLOCK_ENABLED:
             self._badge("interlock", "off")
-            self._interlock_manual_mode("⚠ Interlock wyłączony (ENG → Interlock) — start ręczny")
+            self._interlock_manual_mode("⚠ Interlock wyłączony (ENG → Interlock) - start ręczny")
         elif self._interlock_ok:
             self._badge("interlock", "ok")
             self._cfg(self.interlock_label, text="⏳ Oczekiwanie na stan klapy...", fg=C_WARN,
@@ -642,11 +642,11 @@ class TestScreen:
         self._cfg(self.reconnect_button, state="normal")
         problems = self._start_blockers(ignore_lid=True)
         if not problems:
-            self._cfg(self.status_label, text="✓ Urządzenia gotowe — zamknij klapę lub naciśnij START",
+            self._cfg(self.status_label, text="✓ Urządzenia gotowe - zamknij klapę lub naciśnij START",
                       fg=C_OK)
             if not self._interlock_active():
                 self._cfg(self.start_button, state="normal")
-            # Pierwszy SN: tylko sprawdzenie duplikatu — start przyciskiem lub zamknięciem klapy.
+            # Pierwszy SN: tylko sprawdzenie duplikatu - start przyciskiem lub zamknięciem klapy.
             self._check_duplicate_bg(self.serial_number, autostart=False)
         elif self.status_label.cget("fg") != C_ERR:
             self._cfg(self.status_label, text="✗ " + problems[0], fg=C_ERR)
@@ -697,7 +697,7 @@ class TestScreen:
             self._watch_relay_revert()
 
     def _watch_relay_revert(self):
-        """Moduł sam wraca do 'load' po RELAY_REVERT_S — odśwież etykietę."""
+        """Moduł sam wraca do 'load' po RELAY_REVERT_S - odśwież etykietę."""
         rl = self.relay
         if self._closed or rl is None:
             return
@@ -708,7 +708,7 @@ class TestScreen:
 
     def _apply_interlock_state(self, closed):
         if closed is None:
-            self._cfg(self.interlock_label, text="⚠ Utracono połączenie z interlockiem — próba wznowienia",
+            self._cfg(self.interlock_label, text="⚠ Utracono połączenie z interlockiem - próba wznowienia",
                       fg=C_WARN, bg="#fff8e1")
             self._cfg(self.interlock_frame, bg="#fff8e1")
             self._badge("interlock", "err")
@@ -733,7 +733,7 @@ class TestScreen:
             elif not self.test_running and not self._serial_consumed:
                 self._cfg(self.start_button, state="normal")
         else:
-            self._cfg(self.interlock_label, text="🔓 Klapa OTWARTA — wyjmij zasilacz i zamknij klapę",
+            self._cfg(self.interlock_label, text="🔓 Klapa OTWARTA - wyjmij zasilacz i zamknij klapę",
                       fg=C_ERR, bg="#ffebee")
             self._cfg(self.interlock_frame, bg="#ffebee")
             if self.test_running:
@@ -757,7 +757,7 @@ class TestScreen:
         if not fits:
             p.append(why)
         if self.load_enabled and not (self.oel and self._oel_ok and self.oel.connected):
-            p.append("OEL8512 niepołączony — test obciążenia niemożliwy")
+            p.append("OEL8512 niepołączony - test obciążenia niemożliwy")
         if not (self.relay and self._relay_ok and self.relay.connected):
             p.append(f"Brak połączenia z przekaźnikiem ({self.config.RELAY_PORT})")
         if self.config.INTERLOCK_ENABLED and not self._interlock_active():
@@ -770,7 +770,7 @@ class TestScreen:
         if self._closed or self.test_running:
             return
         if self._serial_consumed:
-            self._cfg(self.status_label, text="➜ Wynik tego SN jest zapisany — kliknij „Następny SN”",
+            self._cfg(self.status_label, text="➜ Wynik tego SN jest zapisany - kliknij „Następny SN”",
                       fg=C_WARN)
             self._cfg(self.start_button, state="disabled")
             self._pending_start = False
@@ -794,7 +794,7 @@ class TestScreen:
         if t is not None and t.is_alive():
             t.join(timeout=3.0)              # poprzednie STOP musi skończyć HV OFF / INP 0
             if t.is_alive():
-                self._cfg(self.status_label, text="⏳ Kończenie poprzedniego zatrzymania — spróbuj ponownie",
+                self._cfg(self.status_label, text="⏳ Kończenie poprzedniego zatrzymania - spróbuj ponownie",
                           fg=C_WARN)
                 return
         self.test_running = True
@@ -824,11 +824,11 @@ class TestScreen:
 
     def _reset_live(self):
         for lb, txt in ((self.hp_v, "0 V"), (self.hp_i, "0.000 mA"), (self.hp_t, "0.0 s"),
-                        (self.ld_pt, "—"), (self.ld_v, "0.000 V"), (self.ld_i, "0.000 A"),
+                        (self.ld_pt, "-"), (self.ld_v, "0.000 V"), (self.ld_i, "0.000 A"),
                         (self.ld_p, "0.00 W")):
             self._cfg(lb, text=txt)
         for name, lb in self.point_labels.items():
-            self._cfg(lb, text=f"{name}: —", bg="#ECEFF1", fg="#555")
+            self._cfg(lb, text=f"{name}: -", bg="#ECEFF1", fg="#555")
         self._progress(0)
 
     # ------------------------------------------------------------------ #
@@ -875,7 +875,7 @@ class TestScreen:
 
     def _on_load_live(self, d):
         pt = d["point"]
-        self._cfg(self.ld_pt, text=f"{pt} {d['i_set']:.2f}A" if pt in ("MIN", "MAX") else (pt or "—"))
+        self._cfg(self.ld_pt, text=f"{pt} {d['i_set']:.2f}A" if pt in ("MIN", "MAX") else (pt or "-"))
         self._cfg(self.ld_v, text=f"{d['v']:.3f} V")
         self._cfg(self.ld_i, text=f"{d['i']:.3f} A")
         self._cfg(self.ld_p, text=f"{d['p']:.2f} W")
@@ -884,7 +884,7 @@ class TestScreen:
         for pr in lv.points:
             ok = pr.result == PASS
             lb = self.point_labels.get(pr.name)
-            if lb is None:                           # NC — zasilacz niepodłączony
+            if lb is None:                           # NC - zasilacz niepodłączony
                 lb = self.point_labels["MIN"]
                 self._cfg(lb, text=f"Brak napięcia: {pr.v:.2f} V  ✗", bg="#ffebee", fg=C_ERR)
                 continue
@@ -949,11 +949,11 @@ class TestScreen:
             self._set_verdict(self.ld_panel, res.load_status, res.reason)
         if res.hipot is None:
             if res.hipot_skipped and res.overall not in (ABORTED,):
-                self._set_verdict(self.hp_panel, SKIP, f"Pominięty — {res.hipot_skipped}"
+                self._set_verdict(self.hp_panel, SKIP, f"Pominięty - {res.hipot_skipped}"
                                   if res.load_status in (FAIL, INVALID) else res.reason)
             elif res.overall in (ABORTED, INVALID):
                 self._set_verdict(self.hp_panel, res.overall if res.load_status != ABORTED else SKIP,
-                                  res.reason if res.load_status != ABORTED else "Pominięty — przerwano")
+                                  res.reason if res.load_status != ABORTED else "Pominięty - przerwano")
             else:
                 self._set_verdict(self.hp_panel, "WAIT")
         if self.seq_mode:
@@ -968,14 +968,14 @@ class TestScreen:
                                    parent=self.parent)
         if res.overall == ABORTED:
             saved = " (raport obciążenia już zapisany)" if res.load_report else ""
-            self._cfg(self.status_label, text=f"⛔ {res.reason} — wynik całkowity NIE zapisany{saved}",
+            self._cfg(self.status_label, text=f"⛔ {res.reason} - wynik całkowity NIE zapisany{saved}",
                       fg=C_ERR)
             self._cfg(self.start_button, state="normal" if not self._interlock_active() else "disabled")
             return
 
         if res.overall == INVALID:
             saved_ld = " (raport obciążenia zapisany)" if res.load_report else ""
-            self._cfg(self.status_label, text=f"✗ TEST NIEWAŻNY — powtórz{saved_ld}", fg=C_ERR)
+            self._cfg(self.status_label, text=f"✗ TEST NIEWAŻNY - powtórz{saved_ld}", fg=C_ERR)
             messagebox.showerror("Test nieważny",
                                  f"{res.reason}\n\nWynik całkowity NIE został zapisany ani policzony"
                                  f"{saved_ld}.\nSprawdź podłączenie i powtórz test.",
@@ -983,13 +983,13 @@ class TestScreen:
             self.parent.after(200, lambda: self.show_result_and_next_serial("NIEWAŻNY"))
             return
 
-        # PASS / FAIL — liczone w statystykach
+        # PASS / FAIL - liczone w statystykach
         self._serial_consumed = True
         is_dup = bool(self._current_sn_is_duplicate)
         if res.overall == PASS:
             self._cfg(self.status_label, text="✓ TEST ZALICZONY (PASS)", fg=C_OK)
         else:
-            self._cfg(self.status_label, text=f"✗ TEST NIEZALICZONY (FAIL) — {res.reason}", fg=C_ERR)
+            self._cfg(self.status_label, text=f"✗ TEST NIEZALICZONY (FAIL) - {res.reason}", fg=C_ERR)
         if self.shift_stats:
             try:
                 self.shift_stats.add_result(res.overall, is_duplicate=is_dup,
@@ -1019,13 +1019,13 @@ class TestScreen:
         self._abort_test("Test przerwany przez operatora")
 
     def _abort_test(self, reason):
-        """HV OFF i wejście OEL OFF — natychmiast, w tle. Przekaźnik przełącza wyłącznie
+        """HV OFF i wejście OEL OFF - natychmiast, w tle. Przekaźnik przełącza wyłącznie
         sekwencja (po rozładowaniu HV), nigdy ten wątek."""
         was = self.test_running
         self._abort.set()
         self._cfg(self.stop_button, state="disabled")
         if was:
-            self._cfg(self.status_label, text=f"⛔ {reason} — zatrzymywanie...", fg=C_ERR)
+            self._cfg(self.status_label, text=f"⛔ {reason} - zatrzymywanie...", fg=C_ERR)
         ch, oel = self.chroma, self.oel
 
         def worker():
@@ -1060,7 +1060,7 @@ class TestScreen:
         ss = self.shift_stats
         start, end = (ss.shift_start, ss.shift_end) if ss else (None, None)
         # Raporty Hi-Pot: SN_YYYYmmddHHMMSS.txt, obciążenia: SN_YYYYmmddHHMMSS_LOAD.txt
-        # (sztuka z FAIL obciążenia ma tylko raport LOAD — dlatego oba katalogi).
+        # (sztuka z FAIL obciążenia ma tylko raport LOAD - dlatego oba katalogi).
         pat = re.compile(r'^' + re.escape(serial.upper()) + r'_(\d{14})(?:_\d+)?(?:_LOAD)?(?:_\d+)?\.txt$',
                          re.IGNORECASE)
         matches = []
@@ -1096,7 +1096,7 @@ class TestScreen:
         where = "tej sesji" if dup.get("where") == "session" else f"logów ({dup.get('last_time')})"
         last = f" (wynik: {STATUS_TXT.get(dup.get('last_result'), dup.get('last_result'))})" \
             if dup.get("last_result") else ""
-        self._cfg(self.status_label, text=f"⚠ DUPLIKAT: SN {serial} był już testowany — {where}{last}",
+        self._cfg(self.status_label, text=f"⚠ DUPLIKAT: SN {serial} był już testowany - {where}{last}",
                   fg="#E65100")
         if messagebox.askyesno("Duplikat SN!", f"SN {serial} był już testowany w tej zmianie!\n"
                                                f"{where}{last}\n\nNa pewno kontynuować?",
@@ -1106,7 +1106,7 @@ class TestScreen:
         else:
             self._current_sn_is_duplicate = False
             self._serial_consumed = True
-            self._cfg(self.status_label, text="Test anulowany — zeskanuj inny numer seryjny", fg="#666")
+            self._cfg(self.status_label, text="Test anulowany - zeskanuj inny numer seryjny", fg="#666")
             self._open_sn_dialog_manually()
 
     # ------------------------------------------------------------------ #
@@ -1122,8 +1122,8 @@ class TestScreen:
         if self._dialog_open():
             self.sn_dialog.lift()
             return
-        self.show_result_and_next_serial(STATUS_TXT.get(self._last_overall, "—")
-                                         if self._last_overall else "—")
+        self.show_result_and_next_serial(STATUS_TXT.get(self._last_overall, "-")
+                                         if self._last_overall else "-")
 
     def _arm_next_test_from_dialog(self):
         if not self._dialog_open():

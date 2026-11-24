@@ -11,7 +11,7 @@ Zasady z baseline OEL85 Verifier 1.2.4 (BASELINE_OEL8512_FW201.md):
   * bez *RST w cyklu testu.
 
 Test 2-punktowy (CC), wykonywany jako PIERWSZY (przed Hi-Pot):
-  NC:  po power_on_delay przy wejściu OFF — brak napięcia = zasilacz niepodłączony
+  NC:  po power_on_delay przy wejściu OFF - brak napięcia = zasilacz niepodłączony
        (LOAD-NC, FAIL; Hi-Pot nie jest wykonywany)
   MIN: i_min (0 A -> wejście OEL wyłączone, pomiar napięcia bez obciążenia)
   MAX: i_max
@@ -30,7 +30,7 @@ PASS, FAIL, INVALID = "PASS", "FAIL", "INVALID"
 
 
 class LoadConfigError(Exception):
-    """Zapis odrzucony (ERR) albo odczyt zwrotny niezgodny — test zablokowany."""
+    """Zapis odrzucony (ERR) albo odczyt zwrotny niezgodny - test zablokowany."""
 
 
 @dataclass
@@ -107,7 +107,7 @@ class OELStation:
                 self.idn = self.t.query("*IDN?") or ""
                 if not self.idn or _is_err(self.idn):
                     self.t.close()
-                    return False, "Brak odpowiedzi na *IDN? — sprawdź port/baudrate OEL"
+                    return False, "Brak odpowiedzi na *IDN? - sprawdź port/baudrate OEL"
                 self.t.write("SYST:REM")
                 self.safe_off()
                 return True, self.idn
@@ -132,7 +132,7 @@ class OELStation:
                 pass
 
     def safe_off(self):
-        """Zwarcie OFF, wejście OFF — zawsze, bez weryfikacji (ścieżka awaryjna)."""
+        """Zwarcie OFF, wejście OFF - zawsze, bez weryfikacji (ścieżka awaryjna)."""
         for cmd in ("INP:SHOR 0", "INP 0"):
             try:
                 self.t.write(cmd)
@@ -166,7 +166,7 @@ class OELStation:
                 raise LoadConfigError(f"INP?: oczekiwano {int(on)}, OEL zwrócił {resp!r}")
 
     def set_short_off(self):
-        """INP:SHOR 0 z weryfikacją — przy zwarciu INP 1 zwarłoby wyjście zasilacza."""
+        """INP:SHOR 0 z weryfikacją - przy zwarciu INP 1 zwarłoby wyjście zasilacza."""
         with self.lock:
             self._write_checked("INP:SHOR 0")
             resp = (self.t.query("INP:SHOR?") or "").strip().upper()
@@ -188,18 +188,18 @@ class OELStation:
             self.set_verified("CURR", 0.0)
 
     def measure(self):
-        """(V, I, flagi) — jeden odczyt. Flagi = lista zadziałanych zabezpieczeń."""
+        """(V, I, flagi) - jeden odczyt. Flagi = lista zadziałanych zabezpieczeń."""
         with self.lock:
             r = self.t.query("MEAS:ALL:INFO?")
         if r is None or _is_err(r):
             raise TransportError("Brak odpowiedzi na MEAS:ALL:INFO?")
         f = [x.strip() for x in r.split(",")]
         if len(f) < 6:
-            raise TransportError(f"MEAS:ALL:INFO? — nieoczekiwana odpowiedź {r!r}")
+            raise TransportError(f"MEAS:ALL:INFO? - nieoczekiwana odpowiedź {r!r}")
         try:
             v, i = float(f[0]), float(f[1])
         except ValueError:
-            raise TransportError(f"MEAS:ALL:INFO? — nieczytelne wartości {r!r}")
+            raise TransportError(f"MEAS:ALL:INFO? - nieczytelne wartości {r!r}")
         flags = [n for n, x in zip(("OVP", "OCP", "OPP"), f[3:6]) if x.upper() in ("ON", "1")]
         return v, i, flags
 
@@ -259,7 +259,7 @@ def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
         st.prepare(ld)
 
         if on_phase:
-            on_phase("Załączanie zasilacza — oczekiwanie na napięcie")
+            on_phase("Załączanie zasilacza - oczekiwanie na napięcie")
         push(point="START", i_set=0.0)
         if not _sleep_abortable(float(ld.get("power_on_delay", 2.0)), abort, tick):
             return LoadVerdict(INVALID, "", "Test obciążenia przerwany")
@@ -277,7 +277,7 @@ def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
         thr = nc_threshold(ld)
         if v0 < thr:
             nc = PointResult("NC", 0.0, round(v0, 4), 0.0, FAIL,
-                             f"Brak napięcia z zasilacza ({v0:.2f} V < {thr:.2f} V) — "
+                             f"Brak napięcia z zasilacza ({v0:.2f} V < {thr:.2f} V) - "
                              "zasilacz niepodłączony lub nie działa", "LOAD-NC")
             return LoadVerdict(FAIL, "LOAD-NC", nc.reason, [nc])
 
@@ -324,7 +324,7 @@ def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
             results.append(pr)
             st.set_input(False)
             if pr.result == FAIL:
-                break                     # dalsze punkty bez sensu — zasilacz odpada
+                break                     # dalsze punkty bez sensu - zasilacz odpada
 
         failed = [p for p in results if p.result != PASS]
         if failed:

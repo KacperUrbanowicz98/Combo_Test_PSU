@@ -1,6 +1,6 @@
 # auth.py
 """
-Hasło do panelu ENG — to samo co w pozostałych aplikacjach stanowiskowych.
+Hasło do panelu ENG - to samo co w pozostałych aplikacjach stanowiskowych.
 W kodzie jest tylko hash SHA-256 z solą, nie jawne hasło.
 """
 import hashlib

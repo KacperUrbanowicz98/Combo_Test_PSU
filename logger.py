@@ -1,7 +1,7 @@
 # logger.py
 """
-Zapis raportów testów — osobny plik na każdy test:
-  * Hi-Pot:      SN_YYYYMMDDHHmmss.txt       format Chroma 19052 (bez zmian — odbiór IFS)
+Zapis raportów testów - osobny plik na każdy test:
+  * Hi-Pot:      SN_YYYYMMDDHHmmss.txt       format Chroma 19052 (bez zmian - odbiór IFS)
   * obciążenie:  SN_YYYYMMDDHHmmss_LOAD.txt  osobny katalog (LOAD_LOG_DIR)
 """
 import os
@@ -36,7 +36,7 @@ def _get_error_description(error_code: str) -> str:
 
 
 def _safe_sn(serial: str) -> str:
-    """SN trafia do nazwy pliku — znaki niedozwolone w NTFS zamieniane na '_'."""
+    """SN trafia do nazwy pliku - znaki niedozwolone w NTFS zamieniane na '_'."""
     import re
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(serial).strip()) or "UNKNOWN"
 
@@ -45,7 +45,7 @@ def _unique_path(log_dir: str, serial: str, now: datetime, suffix: str = "") -> 
     """
     Nazwa pliku SN_YYYYMMDDHHmmss.txt.
     Dwa testy tego samego SN w tej samej sekundzie nadpisywały się nawzajem
-    — dokładany jest sufiks _2, _3, ... żeby żaden wynik nie zniknął.
+    - dokładany jest sufiks _2, _3, ... żeby żaden wynik nie zniknął.
     """
     base = f"{_safe_sn(serial)}_{now.strftime('%Y%m%d%H%M%S')}"
     path = os.path.join(log_dir, base + suffix + ".txt")
@@ -57,7 +57,7 @@ def _unique_path(log_dir: str, serial: str, now: datetime, suffix: str = "") -> 
 
 
 def _write_atomic(filepath: str, lines) -> None:
-    """Zapis przez plik tymczasowy — IFS nigdy nie zobaczy pliku uciętego w połowie."""
+    """Zapis przez plik tymczasowy - IFS nigdy nie zobaczy pliku uciętego w połowie."""
     tmp = filepath + ".part"
     try:
         with open(tmp, "w", encoding="utf-8") as f:
@@ -84,12 +84,12 @@ def save_report(operator: str, program: str, serial: str,
     Zwraca ścieżkę do pliku.
 
     UWAGA: w razie niepowodzenia metoda PODNOSI wyjątek. Wcześniej błąd
-    zapisu (np. zerwany dysk sieciowy IFS) trafiał tylko na konsolę —
+    zapisu (np. zerwany dysk sieciowy IFS) trafiał tylko na konsolę -
     operator widział PASS, a raport nigdy nie powstawał.
 
     Jednostki:
-        vtm — [kV]
-        im, low, high — [mA]
+        vtm - [kV]
+        im, low, high - [mA]
     """
     os.makedirs(log_dir, exist_ok=True)
 

@@ -4,7 +4,7 @@ Niezależna ocena wyniku testu po stronie aplikacji.
 
 Dlaczego: aplikacja ufała wyłącznie kodowi oceny z Chromy
 (SAFEty:RESult:LAST:JUDG? == 116). W logach są raporty PASS z Vtm = 0.000 kV
-i Im = 0.000 mA — urządzenie nie podało napięcia, a wynik i tak był PASS.
+i Im = 0.000 mA - urządzenie nie podało napięcia, a wynik i tak był PASS.
 "LAST" zwraca ostatni zapamiętany wynik, więc gdy START nie wykonał testu
 (albo status był odczytany zanim test ruszył), aplikacja zapisywała wynik
 poprzedniej sztuki albo pusty PASS.
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 PASS = "PASS"
 FAIL = "FAIL"
-INVALID = "INVALID"        # test nieważny — nie zapisywać, powtórzyć
+INVALID = "INVALID"        # test nieważny - nie zapisywać, powtórzyć
 
 # Napięcie zmierzone w trakcie testu, od którego uznajemy, że HV było podane.
 HV_EVIDENCE_RATIO = 0.5
@@ -73,7 +73,7 @@ def validate(device_result: str, data: dict, params: dict,
     low = float(params.get("current_limit_low", 0) or 0)       # [mA]
     high = float(params.get("current_limit_high", 0) or 0)     # [mA]
 
-    # Wartości z wyniku Chromy; jeśli puste/overflow — z pomiarów TEGO cyklu.
+    # Wartości z wyniku Chromy; jeśli puste/overflow - z pomiarów TEGO cyklu.
     raw_v = data.get("output_voltage", 0.0)
     raw_i = data.get("measured_current_ma", 0.0)
     v = float(raw_v) if _valid(raw_v) else evidence.peak_voltage
@@ -92,14 +92,14 @@ def validate(device_result: str, data: dict, params: dict,
         return Verdict(INVALID, "",
                        "Urządzenie zgłosiło PASS, ale test nie został wykonany "
                        "(brak stanu RUNNING i brak napięcia w trakcie testu). "
-                       "Wynik pochodzi z pamięci Chromy — NIE zapisano.", v, i)
+                       "Wynik pochodzi z pamięci Chromy - NIE zapisano.", v, i)
 
     if mode == "IR":
         return Verdict(PASS, "", "", v, i)
 
     if v <= 0:
         return Verdict(INVALID, "",
-                       "Urządzenie zgłosiło PASS bez pomiaru napięcia — "
+                       "Urządzenie zgłosiło PASS bez pomiaru napięcia - "
                        "nie można ocenić testu. NIE zapisano.", v, i)
 
     if setpoint > 0 and tol > 0 and abs(v - setpoint) > tol:
@@ -109,7 +109,7 @@ def validate(device_result: str, data: dict, params: dict,
 
     if low > 0 and i < low:
         return Verdict(FAIL, CODE_AC_LOW if mode == "AC" else CODE_DC_LOW,
-                       f"Prąd {i:.3f} mA poniżej limitu LOW {low:.3f} mA — "
+                       f"Prąd {i:.3f} mA poniżej limitu LOW {low:.3f} mA - "
                        f"zasilacz niepodłączony lub brak styku.", v, i)
 
     if high > 0 and i > high:

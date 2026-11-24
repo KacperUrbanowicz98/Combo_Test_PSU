@@ -1,6 +1,6 @@
 # stats_window.py
 """
-Okno statystyk (zmiany + historia dzienna) — przeniesione z test_screen.py
+Okno statystyk (zmiany + historia dzienna) - przeniesione z test_screen.py
 Hi-Pot PSU 1.1.2. Zamiast HRID operatora: nazwa stanowiska.
 Liczony jest WYNIK CAŁKOWITY sztuki (Hi-Pot + obciążenie).
 """
@@ -53,7 +53,7 @@ def show_stats_window(parent, config):
         sf.bind("<Configure>", lambda e: c.configure(scrollregion=c.bbox("all")))
         c.bind("<Configure>", lambda e: c.itemconfig(cw, width=e.width))
 
-        # POPRAWKA: było bind_all("<MouseWheel>") — globalna podpinka,
+        # POPRAWKA: było bind_all("<MouseWheel>") - globalna podpinka,
         # która po zamknięciu okna wskazywała na zniszczony Canvas
         # i przy każdym ruchu rolki sypała TclError w całej aplikacji.
         def _wheel(event):
@@ -67,7 +67,7 @@ def show_stats_window(parent, config):
             widget.bind("<Button-5>", lambda e: c.yview_scroll(1, "units"))
         return sf
 
-    # ---------------- ZAKŁADKA 1 — ZMIANY ---------------- #
+    # ---------------- ZAKŁADKA 1 - ZMIANY ---------------- #
     tab_shifts = tk.Frame(nb, bg=config.COLOR_BG)
     nb.add(tab_shifts, text="  Zmiany  ")
 
@@ -81,7 +81,7 @@ def show_stats_window(parent, config):
     scroll_shifts = make_scroll(tab_shifts)
 
     def collect_shifts(day):
-        """Czyta pliki zmian — wołane z wątku tła (dysk sieciowy)."""
+        """Czyta pliki zmian - wołane z wątku tła (dysk sieciowy)."""
         out = []
         try:
             if not os.path.isdir(shift_dir):
@@ -191,7 +191,7 @@ def show_stats_window(parent, config):
               font=("Arial", 9), relief=tk.FLAT, cursor="hand2",
               command=lambda: change_shift_day(1)).pack(side=tk.LEFT, padx=4)
 
-    # ---------------- ZAKŁADKA 2 — HISTORIA DZIENNA ---------------- #
+    # ---------------- ZAKŁADKA 2 - HISTORIA DZIENNA ---------------- #
     tab_daily = tk.Frame(nb, bg=config.COLOR_BG)
     nb.add(tab_daily, text="  Historia dzienna  ")
 

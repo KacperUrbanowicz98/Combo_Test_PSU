@@ -1,6 +1,6 @@
 # eng_panel.py
 """
-Panel inżynieryjny (ENG) — dostęp: Ctrl+Alt+D ×3 albo „⚙ Panel ENG” w stopce + hasło.
+Panel inżynieryjny (ENG) - dostęp: Ctrl+Alt+D ×3 albo „⚙ Panel ENG” w stopce + hasło.
 
 Zakładki:
   1. Chroma Hi-Pot            port/baudrate, test połączenia
@@ -38,7 +38,7 @@ def list_com_ports():
         out = []
         for p in sorted(list_ports.comports(), key=lambda x: x.device):
             vp = f"{p.vid:04X}:{p.pid:04X}" if p.vid is not None else ""
-            out.append((f"{p.device} — {p.description or ''}" + (f" [{vp}]" if vp else ""), p.device, vp))
+            out.append((f"{p.device} - {p.description or ''}" + (f" [{vp}]" if vp else ""), p.device, vp))
         return out
     except Exception:
         return []
@@ -48,7 +48,7 @@ def ask_password(root, cfg) -> bool:
     """Okno hasła ENG. True = dostęp."""
     result = {"ok": False}
     w = tk.Toplevel(root)
-    w.title("Panel ENG — logowanie")
+    w.title("Panel ENG - logowanie")
     w.geometry("400x220")
     w.configure(bg=cfg.COLOR_BG)
     w.resizable(False, False)
@@ -179,7 +179,7 @@ class EngPanel:
         self.window.after(50, self._pump)
 
     def _bg(self, fn, done):
-        """fn() w wątku tła, done(wynik) w wątku GUI (przez kolejkę — wątki nie dotykają Tk)."""
+        """fn() w wątku tła, done(wynik) w wątku GUI (przez kolejkę - wątki nie dotykają Tk)."""
         def worker():
             try:
                 r = fn()
@@ -218,7 +218,7 @@ class EngPanel:
     # CHROMA                                                               #
     # ------------------------------------------------------------------ #
     def _tab_chroma(self):
-        outer, b = self._page("Chroma Hi-Pot", "Połączenie RS232 — Chroma 19052")
+        outer, b = self._page("Chroma Hi-Pot", "Połączenie RS232 - Chroma 19052")
         self._field(b, 0, "Port COM:", "DEFAULT_COM_PORT", "combo", self._port_values())
         self._field(b, 1, "Baudrate:", "DEFAULT_BAUDRATE", "combo", BAUDS, conv=int)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
@@ -251,7 +251,7 @@ class EngPanel:
     # OEL8512                                                              #
     # ------------------------------------------------------------------ #
     def _tab_oel(self):
-        outer, b = self._page("Test obciążenia OEL8512", "Połączenie — OWON OEL8512")
+        outer, b = self._page("Test obciążenia OEL8512", "Połączenie - OWON OEL8512")
         pv = self._field(b, 0, "Port COM:", "OEL_PORT", "combo", self._port_values())
         vv = self._field(b, 1, "VID:PID (auto-wybór portu):", "OEL_VID_PID")
         self._field(b, 2, "Baudrate:", "OEL_BAUDRATE", "combo", BAUDS, conv=int)
@@ -307,11 +307,11 @@ class EngPanel:
     # PRZEKAŹNIK / INTERLOCK (wspólne połączenie testowe)                  #
     # ------------------------------------------------------------------ #
     def _tab_relay(self):
-        outer, b = self._page("Przekaźnik", "Moduł przekaźników — przełączanie LOAD / HI-POT")
+        outer, b = self._page("Przekaźnik", "Moduł przekaźników - przełączanie LOAD / HI-POT")
         self._field(b, 0, "Port COM:", "RELAY_PORT", "combo", self._port_values())
         self._field(b, 1, "Baudrate:", "RELAY_BAUDRATE", "combo", BAUDS, conv=int)
-        self._field(b, 2, "Komenda — test obciążenia:", "RELAY_CMD_LOAD")
-        self._field(b, 3, "Komenda — Hi-Pot:", "RELAY_CMD_HIPOT")
+        self._field(b, 2, "Komenda - test obciążenia:", "RELAY_CMD_LOAD")
+        self._field(b, 3, "Komenda - Hi-Pot:", "RELAY_CMD_HIPOT")
         self._field(b, 4, "Terminator:", "RELAY_TERMINATOR", "combo", TERMS)
         self._field(b, 5, "Oczekiwana odpowiedź (pusto = brak):", "RELAY_ACK")
         self._field(b, 6, "Timeout odpowiedzi [s]:", "RELAY_TIMEOUT", conv=float)
@@ -332,7 +332,7 @@ class EngPanel:
         ent.bind("<Return>", lambda _: self._relay_raw())
         self._btn(raw, "Wyślij", self._relay_raw, "#607D8B")
         self.rl_status = self._status(outer)
-        self.rl_live = tk.Label(outer, text="Przekaźnik: —", bg="#ECEFF1",
+        self.rl_live = tk.Label(outer, text="Przekaźnik: -", bg="#ECEFF1",
                                 font=("Arial", 12, "bold"), padx=10, pady=6)
         self.rl_live.pack(anchor="w", padx=16, pady=6)
 
@@ -345,7 +345,7 @@ class EngPanel:
         bar.pack(anchor="w", padx=16, pady=8)
         self._btn(bar, "🔌 Połącz / rozłącz", self._fixture_toggle)
         self.il_status = self._status(outer)
-        self.il_live = tk.Label(outer, text="Klapa: —", bg="#ECEFF1",
+        self.il_live = tk.Label(outer, text="Klapa: -", bg="#ECEFF1",
                                 font=("Arial", 12, "bold"), padx=10, pady=6)
         self.il_live.pack(anchor="w", padx=16, pady=6)
 
@@ -365,7 +365,7 @@ class EngPanel:
             left = rl.hipot_time_left()
             extra = f" (powrót do LOAD za {left:.0f} s)" if left > 0 else ""
             self.rl_live.config(text=f"Przekaźnik: {mode}{extra}   Ostatnia odpowiedź: "
-                                     f"{rl.last_rx or '—'}   Port: {'OK' if rl.connected else '✗'}")
+                                     f"{rl.last_rx or '-'}   Port: {'OK' if rl.connected else '✗'}")
         self.window.after(300, self._fixture_live)
 
     def _fixture_disconnect(self):
@@ -385,8 +385,8 @@ class EngPanel:
         if self._il is not None or self._rl is not None:
             self._fixture_disconnect()
             self._fx_status("Rozłączono", "#666")
-            self.il_live.config(text="Klapa: —")
-            self.rl_live.config(text="Przekaźnik: —")
+            self.il_live.config(text="Klapa: -")
+            self.rl_live.config(text="Przekaźnik: -")
             return
         if self._apply_vars():
             self._fx_status("✗ Popraw nieprawidłowe wartości w formularzu", C_ERR)
@@ -431,7 +431,7 @@ class EngPanel:
         self._bg(lambda: rl.set_mode(mode),
                  lambda r: self.rl_status.config(
                      text=f"✗ {r}" if isinstance(r, Exception) else
-                     (f"✓ Wysłano '{cmd}'" + (f" — odpowiedź: {rl.last_rx}" if rl.last_rx else "")
+                     (f"✓ Wysłano '{cmd}'" + (f" - odpowiedź: {rl.last_rx}" if rl.last_rx else "")
                       if r[0] else f"✗ {r[1]}"),
                      fg=C_OK if not isinstance(r, Exception) and r[0] else C_ERR))
 
@@ -497,14 +497,14 @@ class EngPanel:
         for k in PowerSupplyModels.get_all_models():
             m = PowerSupplyModels.get_model_info(k)
             p, ld = m["test_params"], m["load_params"]
-            hp = (f"{p['mode']} {p['voltage']} V, {p['current_limit_low']}–{p['current_limit_high']} mA, "
+            hp = (f"{p['mode']} {p['voltage']} V, {p['current_limit_low']}-{p['current_limit_high']} mA, "
                   f"{p['test_time']} s")
-            lt = (f"{ld['v_min']}–{ld['v_max']} V @ {ld['i_min']} A / {ld['i_max']} A"
+            lt = (f"{ld['v_min']}-{ld['v_max']} V @ {ld['i_min']} A / {ld['i_max']} A"
                   if ld.get("enabled") else "wyłączone (tylko Hi-Pot)")
             sn = m.get("serial_length", [])
             sn = ", ".join(str(x) for x in sorted(sn)) if isinstance(sn, list) else str(sn)
             en = m.get("enabled", True)
-            self.tree.insert("", "end", iid=k, text=k, values=("✓" if en else "—", hp, lt, sn),
+            self.tree.insert("", "end", iid=k, text=k, values=("✓" if en else "-", hp, lt, sn),
                              tags=() if en else ("off",))
 
     def _selected(self):
@@ -546,7 +546,7 @@ class EngPanel:
             if not key:
                 return
         src = copy.deepcopy(PowerSupplyModels.get_model_info(key)) if key else {
-            "name": "", "description": "", "enabled": True, "serial_length": [10],
+            "name": "", "description": "", "devices": "", "enabled": True, "serial_length": [10],
             "test_params": {"mode": "AC", "voltage": 3000, "voltage_tolerance": 50,
                             "current_limit_high": 2.5, "current_limit_low": 0.3, "ramp_time": 0.0,
                             "test_time": 1.0, "fall_time": 0.0, "frequency": 50, "arc_detection": 0.0},
@@ -586,34 +586,36 @@ class EngPanel:
         en_var = tk.BooleanVar(value=src.get("enabled", True))
         tk.Checkbutton(f, text="Profil aktywny", variable=en_var, bg=c.COLOR_WHITE).grid(
             row=2, column=2, columnspan=2, sticky="w")
-        sec(3, "Hi-Pot (Chroma 19052)")
-        tk.Label(f, text="Tryb:", bg=c.COLOR_WHITE).grid(row=4, column=0, sticky="w")
+        row(3, 0, "Urządzenia:", "devices", src.get("devices", ""), 70)
+        f.grid_slaves(row=3, column=1)[0].grid(columnspan=3)
+        sec(4, "Hi-Pot (Chroma 19052)")
+        tk.Label(f, text="Tryb:", bg=c.COLOR_WHITE).grid(row=5, column=0, sticky="w")
         mode_var = tk.StringVar(value=p.get("mode", "AC"))
         ttk.Combobox(f, textvariable=mode_var, values=["AC", "DC"], width=11, state="readonly"
-                     ).grid(row=4, column=1, sticky="w")
-        row(4, 2, "Napięcie [V]:", "voltage", p["voltage"])
-        row(5, 0, "Tolerancja [V]:", "voltage_tolerance", p.get("voltage_tolerance", 50))
-        row(5, 2, "Częstotliwość [Hz]:", "frequency", p.get("frequency", 50))
-        row(6, 0, "Prąd LOW [mA]:", "current_limit_low", p["current_limit_low"])
-        row(6, 2, "Prąd HIGH [mA]:", "current_limit_high", p["current_limit_high"])
-        row(7, 0, "Ramp [s]:", "ramp_time", p["ramp_time"])
-        row(7, 2, "Test [s]:", "test_time", p["test_time"])
-        row(8, 0, "Fall [s]:", "fall_time", p["fall_time"])
-        row(8, 2, "ARC:", "arc_detection", p.get("arc_detection", 0.0))
-        sec(9, "Obciążenie (OEL8512, CC — punkty MIN i MAX)")
+                     ).grid(row=5, column=1, sticky="w")
+        row(5, 2, "Napięcie [V]:", "voltage", p["voltage"])
+        row(6, 0, "Tolerancja [V]:", "voltage_tolerance", p.get("voltage_tolerance", 50))
+        row(6, 2, "Częstotliwość [Hz]:", "frequency", p.get("frequency", 50))
+        row(7, 0, "Prąd LOW [mA]:", "current_limit_low", p["current_limit_low"])
+        row(7, 2, "Prąd HIGH [mA]:", "current_limit_high", p["current_limit_high"])
+        row(8, 0, "Ramp [s]:", "ramp_time", p["ramp_time"])
+        row(8, 2, "Test [s]:", "test_time", p["test_time"])
+        row(9, 0, "Fall [s]:", "fall_time", p["fall_time"])
+        row(9, 2, "ARC:", "arc_detection", p.get("arc_detection", 0.0))
+        sec(10, "Obciążenie (OEL8512, CC - punkty MIN i MAX)")
         ld_en = tk.BooleanVar(value=ld.get("enabled", True))
         tk.Checkbutton(f, text="Test obciążenia włączony", variable=ld_en, bg=c.COLOR_WHITE).grid(
-            row=10, column=0, columnspan=2, sticky="w")
-        row(10, 2, "V nominal [V]:", "v_nominal", ld.get("v_nominal", 0))
-        row(11, 0, "V min [V]:", "v_min", ld["v_min"])
-        row(11, 2, "V max [V]:", "v_max", ld["v_max"])
-        row(12, 0, "I min [A]:", "i_min", ld["i_min"])
-        row(12, 2, "I max [A]:", "i_max", ld["i_max"])
-        row(13, 0, "Załączenie [s]:", "power_on_delay", ld.get("power_on_delay", 2.0))
-        row(13, 2, "Ustalanie [s]:", "settle_time", ld.get("settle_time", 1.0))
-        row(14, 0, "Próbki:", "samples", ld.get("samples", 5))
-        row(14, 2, "Tol. prądu [%]:", "i_tol_pct", ld.get("i_tol_pct", 3.0))
-        row(15, 0, "Tol. prądu [A]:", "i_tol_abs", ld.get("i_tol_abs", 0.02))
+            row=11, column=0, columnspan=2, sticky="w")
+        row(11, 2, "V nominal [V]:", "v_nominal", ld.get("v_nominal", 0))
+        row(12, 0, "V min [V]:", "v_min", ld["v_min"])
+        row(12, 2, "V max [V]:", "v_max", ld["v_max"])
+        row(13, 0, "I min [A]:", "i_min", ld["i_min"])
+        row(13, 2, "I max [A]:", "i_max", ld["i_max"])
+        row(14, 0, "Załączenie [s]:", "power_on_delay", ld.get("power_on_delay", 2.0))
+        row(14, 2, "Ustalanie [s]:", "settle_time", ld.get("settle_time", 1.0))
+        row(15, 0, "Próbki:", "samples", ld.get("samples", 5))
+        row(15, 2, "Tol. prądu [%]:", "i_tol_pct", ld.get("i_tol_pct", 3.0))
+        row(16, 0, "Tol. prądu [A]:", "i_tol_abs", ld.get("i_tol_abs", 0.02))
         err = tk.Label(d, text="", bg=c.COLOR_WHITE, fg=C_ERR, font=("Arial", 10), wraplength=640)
         err.pack()
 
@@ -631,7 +633,7 @@ class EngPanel:
                 lengths = sorted({int(x) for x in v["sn"].get().replace(" ", "").split(",") if x})
                 assert lengths and all(1 <= x <= 64 for x in lengths)
             except Exception:
-                err.config(text="Długość SN: liczby 1–64 rozdzielone przecinkiem (np. 10,21)")
+                err.config(text="Długość SN: liczby 1-64 rozdzielone przecinkiem (np. 10,21)")
                 return
             try:
                 hp = {k_: float(v[k_].get().replace(",", ".")) for k_ in
@@ -648,7 +650,7 @@ class EngPanel:
             newld["enabled"] = bool(ld_en.get())
             probs = []
             if not (0 < hp["voltage"] <= 6000):
-                probs.append("napięcie Hi-Pot 1–6000 V")
+                probs.append("napięcie Hi-Pot 1-6000 V")
             if hp["current_limit_low"] >= hp["current_limit_high"]:
                 probs.append("prąd LOW musi być < HIGH")
             if hp["test_time"] <= 0:
@@ -665,6 +667,7 @@ class EngPanel:
             assert all(r in hp for r in HIPOT_REQUIRED)
             prof = {"name": name, "identifier": src.get("identifier", ""),
                     "description": v["description"].get().strip() or name,
+                    "devices": v["devices"].get().strip(),
                     "enabled": bool(en_var.get()), "serial_length": lengths,
                     "test_params": hp, "load_params": newld}
             if mode == "edit" and name != key:
@@ -790,7 +793,7 @@ class EngPanel:
 class LoopTestWindow:
     """
     Pełna sekwencja (obciążenie + Hi-Pot) powtarzana N razy na tej samej sztuce
-    (np. złoty wzorzec). Wyniki tylko do CSV w katalogu testów ENG — nie do IFS
+    (np. złoty wzorzec). Wyniki tylko do CSV w katalogu testów ENG - nie do IFS
     i nie do statystyk zmiany.
     """
 
@@ -804,7 +807,7 @@ class LoopTestWindow:
         self._q = _q.Queue()
         c = cfg
         self.w = tk.Toplevel(parent)
-        self.w.title(f"Test w pętli — {model_key}")
+        self.w.title(f"Test w pętli - {model_key}")
         self.w.configure(bg=c.COLOR_WHITE)
         self.w.geometry("980x600")
         self.w.transient(parent)
@@ -918,9 +921,9 @@ class LoopTestWindow:
                 r = seq.run()
                 self._ui(self._add_row, i, r)
                 if r.overall != "PASS" or r.relay_alarm:
-                    # Ta sama sztuka w każdym cyklu — po FAIL/NIEWAŻNYM nie wolno
+                    # Ta sama sztuka w każdym cyklu - po FAIL/NIEWAŻNYM nie wolno
                     # podawać jej 230 V (obciążenie) ani HV w kolejnym cyklu.
-                    self._ui(self._finish, f"Zatrzymano po cyklu {i}: {r.overall} — {r.reason}")
+                    self._ui(self._finish, f"Zatrzymano po cyklu {i}: {r.overall} - {r.reason}")
                     return
                 if i < n and pause:
                     self.abort.wait(pause)

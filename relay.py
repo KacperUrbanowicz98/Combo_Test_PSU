@@ -1,13 +1,13 @@
 # relay.py
 """
-Przekaźnik stanowiska — moduł przełączający zasilacz między testem obciążenia
+Przekaźnik stanowiska - moduł przełączający zasilacz między testem obciążenia
 a Hi-Pot. Dwie komendy tekstowe (ENG -> Przekaźnik):
 
-  load    zasilacz w torze testu obciążenia (OEL8512) — stan domyślny modułu
+  load    zasilacz w torze testu obciążenia (OEL8512) - stan domyślny modułu
   hipot   zasilacz w torze Hi-Pot (Chroma)
 
 Moduł sam wraca do 'load' po ~30 s bez aktywności (RELAY_REVERT_S). Dlatego:
-  * Hi-Pot musi się zmieścić w tym oknie — hipot_time_left() ogranicza czas testu,
+  * Hi-Pot musi się zmieścić w tym oknie - hipot_time_left() ogranicza czas testu,
     inaczej przekaźnik przełączyłby się na OEL w trakcie wysokiego napięcia,
   * po Hi-Pot aplikacja czeka HV_DISCHARGE_S i dopiero wtedy wysyła 'load'.
 

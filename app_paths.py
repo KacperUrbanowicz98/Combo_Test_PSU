@@ -7,7 +7,7 @@ Problem który to rozwiązuje:
     rozwiązuje względem BIEŻĄCEGO KATALOGU ROBOCZEGO, a nie katalogu programu.
     Uruchomienie EXE ze skrótu z innym "Rozpocznij w:", z zadania
     harmonogramu albo z dysku sieciowego powodowało, że aplikacja czytała
-    i tworzyła pliki ustawień w zupełnie innym miejscu — operatorzy,
+    i tworzyła pliki ustawień w zupełnie innym miejscu - operatorzy,
     profile i ścieżka logów "znikały".
 """
 import os

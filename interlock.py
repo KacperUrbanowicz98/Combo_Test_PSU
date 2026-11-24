@@ -1,6 +1,6 @@
 # interlock.py
 """
-Monitor klapy bezpieczeństwa — Arduino via Serial (protokół jak w Hi-Pot PSU:
+Monitor klapy bezpieczeństwa - Arduino via Serial (protokół jak w Hi-Pot PSU:
 Arduino nadaje cyklicznie OPEN / CLOSED).
 
 Z Hi-Pot PSU: automatyczne wznawianie połączenia, heartbeat (brak danych przez
@@ -84,7 +84,7 @@ class InterlockMonitor:
         self._thread = None
 
     def set_on_change(self, callback: Callable[[Optional[bool]], None]):
-        """Callback(closed) — True=zamknięta, False=otwarta, None=brak łączności."""
+        """Callback(closed) - True=zamknięta, False=otwarta, None=brak łączności."""
         self._on_change_cb = callback
 
     def set_on_line(self, callback: Callable[[str], None]):
@@ -168,7 +168,7 @@ class InterlockMonitor:
             now = time.time()
             if not raw:
                 if self._last_state is not STATE_UNKNOWN and (now - self._last_rx) > self.STALE_AFTER:
-                    print("[INTERLOCK] Brak danych z Arduino — utrata interlocka")
+                    print("[INTERLOCK] Brak danych z Arduino - utrata interlocka")
                     self._handle_link_lost()
                 continue
             line = raw.decode("ascii", errors="ignore").strip()

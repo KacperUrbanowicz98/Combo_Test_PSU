@@ -9,7 +9,7 @@ from app_paths import data_path, seed_path
 CONFIG_FILE = data_path("config.json")
 MODELS_FILE = data_path("models.json")
 
-# Lista profili domyślnych skasowanych świadomie w panelu ENG — bez tego
+# Lista profili domyślnych skasowanych świadomie w panelu ENG - bez tego
 # usunięty profil fabryczny wracał po restarcie.
 _DELETED_KEY = "__deleted_defaults__"
 
@@ -67,7 +67,7 @@ def _atomic_write_json(path: str, data) -> None:
 
 
 def _read_json(path: str):
-    """Czyta JSON obok aplikacji; jeśli brak — wzorzec spakowany w EXE."""
+    """Czyta JSON obok aplikacji; jeśli brak - wzorzec spakowany w EXE."""
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -93,7 +93,7 @@ class SettingsManager:
             self.save_config(cfg)
             return
 
-        # config.json z Hi-Pot PSU (sekcja "rs232") — przejmij porty Chromy
+        # config.json z Hi-Pot PSU (sekcja "rs232") - przejmij porty Chromy
         # i Arduino, żeby stanowisko ruszyło bez ponownego wpisywania.
         rs = data.get("rs232")
         if isinstance(rs, dict) and "hipot" not in data:
@@ -116,7 +116,7 @@ class SettingsManager:
             try:
                 setattr(cfg, attr, typ(sec[key]))
             except (TypeError, ValueError) as e:
-                print(f"[SETTINGS] {section}.{key}: nieprawidłowa wartość ({e}) — domyślna")
+                print(f"[SETTINGS] {section}.{key}: nieprawidłowa wartość ({e}) - domyślna")
         if cfg.DISPLAY_MODE not in ("both", "sequential"):
             cfg.DISPLAY_MODE = "both"
 
@@ -136,8 +136,8 @@ class SettingsManager:
     # ------------------------------------------------------------------ #
     def load_models(self, default_models: dict, migrate=None, is_valid=None) -> dict:
         """
-        migrate(dict) -> (dict, changed)  — normalizacja kluczy/pól starszych plików
-        is_valid(key, value) -> bool      — profil kompletny (Hi-Pot + obciążenie)
+        migrate(dict) -> (dict, changed)  - normalizacja kluczy/pól starszych plików
+        is_valid(key, value) -> bool      - profil kompletny (Hi-Pot + obciążenie)
         """
         try:
             saved = _read_json(MODELS_FILE)
@@ -149,7 +149,7 @@ class SettingsManager:
             self.save_models(default_models, set())
             return {k: json.loads(json.dumps(v)) for k, v in default_models.items()}
         if not isinstance(saved, dict):
-            print(f"[SETTINGS] {MODELS_FILE}: zły format — używam domyślnych")
+            print(f"[SETTINGS] {MODELS_FILE}: zły format - używam domyślnych")
             return {k: json.loads(json.dumps(v)) for k, v in default_models.items()}
 
         deleted = set(saved.pop(_DELETED_KEY, []) or [])

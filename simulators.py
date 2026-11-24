@@ -1,15 +1,15 @@
 # simulators.py
 """
 Symulatory sprzętu do pracy bez stanowiska (python main.py --sim):
-  * SimChroma    — Chroma 19052 (API jak ChromaHiPotDevice); prąd płynie tylko
+  * SimChroma    - Chroma 19052 (API jak ChromaHiPotDevice); prąd płynie tylko
                    gdy przekaźnik jest w 'hipot',
-  * SimInterlock — klapa (prawdziwy InterlockMonitor na fałszywym porcie),
-  * SimRelay     — moduł przekaźników: 'load' / 'hipot', sam wraca do LOAD
+  * SimInterlock - klapa (prawdziwy InterlockMonitor na fałszywym porcie),
+  * SimRelay     - moduł przekaźników: 'load' / 'hipot', sam wraca do LOAD
                    po RELAY_REVERT_S (prawdziwy RelayController),
-  * OEL8512 z zasilaczem — baseline simulator.py + model zasilacza; zasilacz
+  * OEL8512 z zasilaczem - baseline simulator.py + model zasilacza; zasilacz
                    daje napięcie tylko gdy przekaźnik jest w 'load'.
 
-Wymuszanie usterek (tylko symulacja) — końcówka SN:
+Wymuszanie usterek (tylko symulacja) - końcówka SN:
   ...HF  Hi-Pot FAIL (prąd ponad HIGH)
   ...LV  obciążenie: napięcie za niskie
   ...LI  obciążenie: zasilacz nie daje prądu

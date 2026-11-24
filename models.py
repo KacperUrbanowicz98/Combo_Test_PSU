@@ -3,15 +3,15 @@
 Wspólna baza profili testowych: Hi-Pot (Chroma 19052) + test obciążenia (OEL8512).
 
 Źródła:
-  * test_params — eksport profili z aplikacji Hi-Pot PSU (models.json),
-  * load_params — tabele parametrów obciążenia PSU (Min/Max Load, okno napięcia).
+  * test_params - eksport profili z aplikacji Hi-Pot PSU (models.json),
+  * load_params - tabele parametrów obciążenia PSU (Min/Max Load, okno napięcia).
 Profile tylko dla PN, które są w obu źródłach (11 PN). Format PN:
-PSU-000006-00 (zawsze 6 cyfr) — stare klucze PSU-00006-00 są migrowane.
+PSU-000006-00 (zawsze 6 cyfr) - stare klucze PSU-00006-00 są migrowane.
 
 load_params:
   enabled          test obciążenia wykonywany (False = sam Hi-Pot)
   v_nominal        napięcie nominalne [V] (informacyjnie / do raportu)
-  v_min, v_max     okno napięcia wyjściowego [V] — kryterium PASS w każdym punkcie
+  v_min, v_max     okno napięcia wyjściowego [V] - kryterium PASS w każdym punkcie
   i_min, i_max     punkty obciążenia CC [A]; i_min = 0 -> pomiar bez obciążenia (INP 0)
   power_on_delay   [s] od przełączenia toru na LOAD (230 V na zasilacz) do pierwszego pomiaru
   settle_time      [s] od ustawienia punktu do pomiaru
@@ -40,9 +40,26 @@ def _ld(v_nom, v_min, v_max, i_min, i_max):
             "i_tol_pct": 3.0, "i_tol_abs": 0.02}
 
 
+# Na jakie urządzenia wchodzi dany zasilacz (tabela PN -> modele).
+_DEVICES = {
+    "PSU-000003-00": "ER115UK, ER115UK_ROI",
+    "PSU-000005-00": "ESi240, ES240UK",
+    "PSU-000006-00": "SR204UK, SR203UKIE, SR203UK",
+    "PSU-000007-00": "SE210UK",
+    "PSU-000008-00": "SR203IT",
+    "PSU-000013-00": "IP061DE, IP061-01-DE, IP061IT, IP061-02-IT, IP061-EC-IT",
+    "PSU-000016-00": "IP061UK",
+    "PSU-000033-00": "IP061B",
+    "PSU-000049-00": "SR213A, SR203UK DEPOP",
+    "MPD-PW00476AA": "DPS5002NS, DPS5002NS_VR, DZS3001NS",
+    "01403-00516":   "ESD-160S, ESD-160C, ESD-160S/VE, ESD-160C/VE, ESI-160, ESI-160/VE, "
+                     "ESI-160/IP, ESI-160/IP_VE",
+}
+
+
 def _p(pn, desc, sn_len, hp, ld):
-    return {"name": pn, "identifier": "", "description": desc, "enabled": True,
-            "serial_length": sn_len, "test_params": hp, "load_params": ld}
+    return {"name": pn, "identifier": "", "description": desc, "devices": _DEVICES.get(pn, ""),
+            "enabled": True, "serial_length": sn_len, "test_params": hp, "load_params": ld}
 
 
 _DEFAULT_MODELS = {
@@ -107,10 +124,14 @@ def _migrate(saved: dict):
         if "enabled" not in val:
             val["enabled"] = True
             changed = True
+        # v1.1.1: lista urządzeń, na które wchodzi zasilacz
+        if "devices" not in val:
+            val["devices"] = _DEVICES.get(new_key, "")
+            changed = True
         if isinstance(val.get("serial_length"), int):
             val["serial_length"] = [val["serial_length"]]
             changed = True
-        # Profil z Hi-Pot PSU bez parametrów obciążenia — dopisz z tabeli, jeśli PN jest znany.
+        # Profil z Hi-Pot PSU bez parametrów obciążenia - dopisz z tabeli, jeśli PN jest znany.
         if "load_params" not in val and new_key in _DEFAULT_MODELS:
             val["load_params"] = copy.deepcopy(_DEFAULT_MODELS[new_key]["load_params"])
             changed = True
@@ -119,7 +140,7 @@ def _migrate(saved: dict):
                 if k not in val["load_params"]:
                     val["load_params"][k] = v
                     changed = True
-        if new_key in out:          # stary i nowy klucz naraz — zostaje nowszy (6 cyfr)
+        if new_key in out:          # stary i nowy klucz naraz - zostaje nowszy (6 cyfr)
             changed = True
             if key != new_key:
                 continue
@@ -144,7 +165,7 @@ def _is_valid(key, value) -> bool:
 
 
 def check_load_params(ld: dict) -> list:
-    """Spójność parametrów obciążenia — lista problemów (pusta = OK)."""
+    """Spójność parametrów obciążenia - lista problemów (pusta = OK)."""
     problems = []
     try:
         vmin, vmax = float(ld["v_min"]), float(ld["v_max"])
@@ -160,14 +181,14 @@ def check_load_params(ld: dict) -> list:
     for k, lo, hi in (("power_on_delay", 0, 30), ("settle_time", 0.1, 30), ("samples", 1, 50)):
         try:
             if not (lo <= float(ld.get(k, lo)) <= hi):
-                problems.append(f"{k} poza zakresem {lo}–{hi}")
+                problems.append(f"{k} poza zakresem {lo}-{hi}")
         except (TypeError, ValueError):
             problems.append(f"{k}: nieprawidłowa wartość")
     return problems
 
 
 class PowerSupplyModels:
-    """Baza profili — wczytywana z models.json przy starcie."""
+    """Baza profili - wczytywana z models.json przy starcie."""
 
     MODELS: dict = _sm.load_models(_DEFAULT_MODELS, _migrate, _is_valid)
 
@@ -206,12 +227,12 @@ class PowerSupplyModels:
             return False, "Pusty numer seryjny"
         # Pojedyncza spacja w środku dozwolona (etykiety PSU-000013-00 / -000019-00,
         # np. "SSW-3344EU 24BC301844"). Odrzucamy tabulatory, znaki sterujące
-        # i podwójne spacje — typowe dla źle skonfigurowanego skanera.
+        # i podwójne spacje - typowe dla źle skonfigurowanego skanera.
         if any(ch.isspace() and ch != " " for ch in serial_number) \
                 or any(not ch.isprintable() for ch in serial_number):
-            return False, "SN zawiera niedozwolone znaki — zeskanuj ponownie"
+            return False, "SN zawiera niedozwolone znaki - zeskanuj ponownie"
         if "  " in serial_number:
-            return False, "SN zawiera podwójną spację — zeskanuj ponownie"
+            return False, "SN zawiera podwójną spację - zeskanuj ponownie"
 
         expected = model.get("serial_length", [])
         if isinstance(expected, int):

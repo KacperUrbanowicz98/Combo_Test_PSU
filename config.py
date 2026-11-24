@@ -6,7 +6,7 @@ import socket
 from app_paths import app_dir
 
 APP_NAME = "Combo Test PSU"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 
 def decode_term(s: str) -> str:
@@ -32,19 +32,19 @@ class Config:
     WINDOW_HEIGHT = 860
     WINDOW_TITLE = f"Reconext {APP_NAME}"
 
-    # RS232 — Chroma Hi-Pot
+    # RS232 - Chroma Hi-Pot
     DEFAULT_COM_PORT = "COM6"
     DEFAULT_BAUDRATE = 9600
 
-    # RS232 / USB-COM — OWON OEL8512 (parametry z baseline OEL85 Verifier 1.2.4)
+    # RS232 / USB-COM - OWON OEL8512 (parametry z baseline OEL85 Verifier 1.2.4)
     OEL_PORT = "COM3"
-    OEL_VID_PID = ""                 # np. 1A86:7523 — auto-wybór portu po VID:PID
+    OEL_VID_PID = ""                 # np. 1A86:7523 - auto-wybór portu po VID:PID
     OEL_BAUDRATE = 115200
     OEL_TIMEOUT = 1.0                # [s]
     OEL_DELAY_MS = 60                # przerwa po zapisie; w tym oknie OEL odsyła ERR
     OEL_TERMINATOR = "\\n"           # TX i RX
 
-    # Interlock klapy — Arduino (linie OPEN / CLOSED, jak w Hi-Pot PSU)
+    # Interlock klapy - Arduino (linie OPEN / CLOSED, jak w Hi-Pot PSU)
     INTERLOCK_PORT = "COM5"
     INTERLOCK_BAUDRATE = 9600
     INTERLOCK_ENABLED = True
@@ -70,7 +70,7 @@ class Config:
     LOAD_LOG_DIR = "logs_load"       # raporty testu obciążenia (osobny plik na test)
     ENG_LOG_DIR = "logs_eng"         # testy w pętli z panelu ENG (nie trafiają do IFS)
 
-    # Tryb symulacji (tylko z linii poleceń: --sim) — nie zapisywany
+    # Tryb symulacji (tylko z linii poleceń: --sim) - nie zapisywany
     SIMULATION = False
 
     def __init__(self, simulation: bool = False):

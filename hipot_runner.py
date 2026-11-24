@@ -1,6 +1,6 @@
 # hipot_runner.py
 """
-Jeden cykl testu Hi-Pot na Chromie 19052 — logika wydzielona z test_screen.py
+Jeden cykl testu Hi-Pot na Chromie 19052 - logika wydzielona z test_screen.py
 aplikacji Hi-Pot PSU 1.1.2 (bez zmian merytorycznych):
   * odpytywanie statusu od razu po START, koniec dopiero po min_run_time,
   * dowody wykonania testu (RUNNING / napięcie w trakcie) -> result_validator,
@@ -51,9 +51,9 @@ def run_hipot(device, test_params: dict, abort: threading.Event,
               ) -> Tuple[Verdict, str, dict]:
     """
     Zwraca (verdict, wynik_z_chromy, dane). verdict.result: PASS/FAIL/INVALID.
-    Przy przerwaniu (abort) zwraca INVALID z reason='ABORT' — wywołujący nie zapisuje wyniku.
+    Przy przerwaniu (abort) zwraca INVALID z reason='ABORT' - wywołujący nie zapisuje wyniku.
     on_live(V, I_mA, elapsed_s).
-    max_seconds — twardy limit z okna przekaźnika (moduł sam wraca do 'load'):
+    max_seconds - twardy limit z okna przekaźnika (moduł sam wraca do 'load'):
     po jego przekroczeniu STOP (HV off) i wynik NIEWAŻNY.
     """
     ok, msg = device.start_test()
@@ -97,11 +97,11 @@ def run_hipot(device, test_params: dict, abort: threading.Event,
                 except Exception:
                     pass
         if time.time() - t0 > hard_limit:
-            # Nie czytamy RESult:LAST — to może być wynik poprzedniej sztuki.
+            # Nie czytamy RESult:LAST - to może być wynik poprzedniej sztuki.
             device.stop_test()
-            print("[HIPOT] Przekroczono limit czasu — STOP, test nieważny")
+            print("[HIPOT] Przekroczono limit czasu - STOP, test nieważny")
             return (Verdict(INVALID, "", f"Przekroczono limit czasu testu Hi-Pot ({hard_limit:.1f} s) "
-                                         "— HV wyłączone, wynik nieważny"), "UNKNOWN", {})
+                                         "- HV wyłączone, wynik nieważny"), "UNKNOWN", {})
         time.sleep(0.1)
 
     if abort.is_set():

@@ -1,9 +1,16 @@
-Combo Test PSU — v1.1.0
+Combo Test PSU - v1.1.1
+
+- Okno potwierdzenia profilu: pod numerem PN lista urządzeń, na które wchodzi zasilacz (tabela PN -> modele).
+  Nowe pole profilu „devices” - edytowalne w ENG -> Profile („Urządzenia”); istniejący models.json
+  uzupełniany automatycznie przy starcie.
+- W całej aplikacji długie myślniki zamienione na zwykły „-”.
+
+Combo Test PSU - v1.1.0
 
 - Kolejność testu: najpierw OBCIĄŻENIE, potem HI-POT. Obciążenie FAIL / NIEWAŻNY = Hi-Pot nie jest
   wykonywany (zasilacz z FAIL nie dostaje wysokiego napięcia).
 - Kontrola podłączenia zasilacza: brak napięcia na wejściu OEL przed obciążeniem = FAIL (LOAD-NC).
-- Klapa nasłuchiwana przez cały test — otwarcie w trakcie obciążenia też przerywa test (OEL OFF).
+- Klapa nasłuchiwana przez cały test - otwarcie w trakcie obciążenia też przerywa test (OEL OFF).
 - Nowy moduł relay.py: przekaźnik przełączany komendami „load” / „hipot” (konfigurowalne: komendy,
   terminator, opcjonalne potwierdzenie, czas ustalania). Wspólny port z interlockiem obsługiwany.
 - Moduł sam wraca do „load” po ~30 s: Hi-Pot ograniczony do tego okna (profil za długi blokowany przed
@@ -11,25 +18,25 @@ Combo Test PSU — v1.1.0
 - interlock.py: tylko klapa (usunięte PATH/keepalive); fixture_controller.ino usunięty.
 - Panel ENG: zakładki 1. Chroma Hi-Pot, 2. Test obciążenia OEL8512, 3. Przekaźnik (ręczne LOAD/HI-POT,
   wysyłanie dowolnej linii z podglądem odpowiedzi), 4. Interlock, 5. Profile, 6. Logi, 7. Ogólne.
-  Usunięte szare notatki, zakładka „Hasła” i poziom Admin — jedno hasło ENG jak w pozostałych aplikacjach.
+  Usunięte szare notatki, zakładka „Hasła” i poziom Admin - jedno hasło ENG jak w pozostałych aplikacjach.
 - Ekran testu: „Tor” -> „Przekaźnik”, statusy Chroma / OEL8512 / Interlock / Przekaźnik, panele
   1. OBCIĄŻENIE i 2. HI-POT, historia w kolejności obciążenie / Hi-Pot.
 - Duplikat SN sprawdzany także w katalogu raportów obciążenia (sztuka z FAIL obciążenia ma tylko raport LOAD).
 - Test w pętli (ENG): kolejność obciążenie -> Hi-Pot, zatrzymanie po pierwszym wyniku innym niż PASS.
 - Symulacja: usterka …NC (zasilacz niepodłączony), symulowany moduł przekaźników z powrotem do LOAD.
 
-Combo Test PSU — v1.0.0 (pierwsza wersja)
+Combo Test PSU - v1.0.0 (pierwsza wersja)
 
 Baza: Hi-Pot PSU 1.1.2 + OEL85 Verifier 1.2.4 (baseline OEL8512 FW V2.0.1)
 
 - Jedna sekwencja: Hi-Pot -> przekaźniki (Arduino/STM) -> test obciążenia 2-punktowy na OEL8512.
-- Usunięte logowanie HRID (operators.json, lista HRID w config.py) — w statystykach nazwa stanowiska.
+- Usunięte logowanie HRID (operators.json, lista HRID w config.py) - w statystykach nazwa stanowiska.
 - models.py: wspólne profile Hi-Pot + obciążenie (11 PN), PN w formacie PSU-000006-00
   (migracja starych kluczy PSU-00006-00), profile włączane/wyłączane.
 - interlock.py: dodane sterowanie torem PATH OFF/HIPOT/LOAD z potwierdzeniem i keepalive.
 - Nowe moduły: hipot_runner.py (logika Hi-Pot wydzielona z test_screen.py), load_tester.py,
   combo_sequence.py, simulators.py, stats_window.py, eng_panel.py, auth.py.
-- oel85.py, transport.py, simulator.py — bez zmian (baseline 1.2.4).
+- oel85.py, transport.py, simulator.py - bez zmian (baseline 1.2.4).
 - logger.py: raport Hi-Pot bez zmian (IFS) + osobny raport obciążenia SN_..._LOAD.txt.
 - Ekran testu: dwa warianty widoku, status połączeń Chroma / OEL8512 / Arduino/STM, aktywny tor,
   historia 5 wyników z wynikiem Hi-Pot, obciążenia i całkowitym, przycisk „Połącz ponownie”.

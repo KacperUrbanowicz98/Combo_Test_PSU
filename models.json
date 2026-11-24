@@ -31,7 +31,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "ER115UK, ER115UK_ROI"
   },
   "PSU-000005-00": {
     "name": "PSU-000005-00",
@@ -65,7 +66,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "ESi240, ES240UK"
   },
   "PSU-000006-00": {
     "name": "PSU-000006-00",
@@ -100,7 +102,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "SR204UK, SR203UKIE, SR203UK"
   },
   "PSU-000007-00": {
     "name": "PSU-000007-00",
@@ -135,7 +138,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "SE210UK"
   },
   "PSU-000008-00": {
     "name": "PSU-000008-00",
@@ -169,7 +173,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "SR203IT"
   },
   "PSU-000013-00": {
     "name": "PSU-000013-00",
@@ -204,7 +209,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "IP061DE, IP061-01-DE, IP061IT, IP061-02-IT, IP061-EC-IT"
   },
   "PSU-000016-00": {
     "name": "PSU-000016-00",
@@ -239,7 +245,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "IP061UK"
   },
   "PSU-000033-00": {
     "name": "PSU-000033-00",
@@ -273,7 +280,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "IP061B"
   },
   "PSU-000049-00": {
     "name": "PSU-000049-00",
@@ -308,7 +316,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "SR213A, SR203UK DEPOP"
   },
   "MPD-PW00476AA": {
     "name": "MPD-PW00476AA",
@@ -342,7 +351,8 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "DPS5002NS, DPS5002NS_VR, DZS3001NS"
   },
   "01403-00516": {
     "name": "01403-00516",
@@ -378,6 +388,7 @@
       "samples": 5,
       "i_tol_pct": 3.0,
       "i_tol_abs": 0.02
-    }
+    },
+    "devices": "ESD-160S, ESD-160C, ESD-160S/VE, ESD-160C/VE, ESI-160, ESI-160/VE, ESI-160/IP, ESI-160/IP_VE"
   }
 }
