@@ -88,10 +88,9 @@ class ComboTesterApp:
 
     def open_eng_panel(self):
         from eng_panel import EngPanel, ask_password
-        level = ask_password(self.root, self.config)
-        if not level:
+        if not ask_password(self.root, self.config):
             return
-        panel = EngPanel(self.root, self.config, level)
+        panel = EngPanel(self.root, self.config)
         try:
             self.root.wait_window(panel.window)
         except Exception:
@@ -123,7 +122,7 @@ class ComboTesterApp:
 
         tk.Label(panel, text="Wybór profilu i skanowanie SN", bg=c.COLOR_WHITE,
                  fg=c.COLOR_PRIMARY, font=("Arial", 20, "bold")).pack(pady=(30, 20))
-        tk.Label(panel, text="Profil testowy (Hi-Pot + obciążenie):", bg=c.COLOR_WHITE,
+        tk.Label(panel, text="Profil testowy (obciążenie + Hi-Pot):", bg=c.COLOR_WHITE,
                  fg="#333333", font=("Arial", 12)).pack(pady=(10, 5))
 
         self.selected_model = tk.StringVar()
@@ -204,16 +203,17 @@ class ComboTesterApp:
                      font=("Arial", 10)).pack(pady=(0, 8))
 
         p, ld = info.get("test_params", {}), info.get("load_params", {})
-        tk.Label(dialog, text=f"HI-POT:  {p.get('mode', '?')}  {p.get('voltage', '?')} V   "
-                              f"limit {p.get('current_limit_low', '?')}–{p.get('current_limit_high', '?')} mA",
-                 bg=c.COLOR_WHITE, fg="#333333", font=("Arial", 11, "bold")).pack(pady=(0, 4))
         if ld.get("enabled"):
-            load_txt = (f"OBCIĄŻENIE:  {ld.get('v_min')}–{ld.get('v_max')} V   "
+            load_txt = (f"1. OBCIĄŻENIE:  {ld.get('v_min')}–{ld.get('v_max')} V   "
                         f"przy {ld.get('i_min')} A i {ld.get('i_max')} A")
         else:
             load_txt = "OBCIĄŻENIE:  wyłączone w profilu (tylko Hi-Pot)"
         tk.Label(dialog, text=load_txt, bg=c.COLOR_WHITE, fg="#333333",
-                 font=("Arial", 11, "bold")).pack(pady=(0, 8))
+                 font=("Arial", 11, "bold")).pack(pady=(0, 4))
+        tk.Label(dialog, text=f"{'2. ' if ld.get('enabled') else ''}HI-POT:  {p.get('mode', '?')}  "
+                              f"{p.get('voltage', '?')} V   "
+                              f"limit {p.get('current_limit_low', '?')}–{p.get('current_limit_high', '?')} mA",
+                 bg=c.COLOR_WHITE, fg="#333333", font=("Arial", 11, "bold")).pack(pady=(0, 8))
         tk.Frame(dialog, bg="#dddddd", height=1).pack(fill=tk.X, padx=30, pady=(0, 16))
 
         bf = tk.Frame(dialog, bg=c.COLOR_WHITE)

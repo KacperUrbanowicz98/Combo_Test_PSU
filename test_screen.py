@@ -7,9 +7,10 @@ blokada startu bez potwierdzonej konfiguracji, start tylko przy zamkniętej
 klapie, przerwanie bez zapisu wyniku, duplikat SN, kopia awaryjna raportu).
 
 Nowe:
-  * sekwencja Hi-Pot -> przekaźniki -> obciążenie (combo_sequence.py),
+  * sekwencja obciążenie -> Hi-Pot (combo_sequence.py); obciążenie FAIL = bez Hi-Pot,
+  * klapa nasłuchiwana przez cały test (także test obciążenia),
   * dwa warianty widoku: oba testy na ekranie / jeden po drugim (ENG -> Ogólne),
-  * status połączeń: Chroma, OEL8512, Arduino/STM + aktywny tor przekaźników,
+  * status połączeń: Chroma, OEL8512, Interlock, Przekaźnik + aktualna pozycja przekaźnika,
   * historia 5 ostatnich wyników z wynikiem Hi-Pot, obciążenia i całkowitym,
   * bez logowania HRID — w statystykach nazwa stanowiska.
 """
@@ -23,7 +24,7 @@ from datetime import datetime
 from tkinter import messagebox
 
 import hipot_runner
-from combo_sequence import ABORTED, FAIL, INVALID, PASS, SKIP, ComboSequence
+from combo_sequence import ABORTED, FAIL, INVALID, PASS, SKIP, ComboSequence, hipot_fits
 from logger import save_load_report, save_report
 from shift_stats import ShiftStats
 
@@ -49,10 +50,12 @@ class TestScreen:
 
         self.chroma = None
         self.oel = None
-        self.fixture = None
+        self.interlock = None
+        self.relay = None
         self._chroma_ok = False
         self._oel_ok = False
-        self._fixture_ok = False
+        self._interlock_ok = False
+        self._relay_ok = False
 
         self.test_running = False
         self._abort = threading.Event()
@@ -74,6 +77,7 @@ class TestScreen:
         self._last_overall = None
         self._t0 = 0.0
         self._abort_thread = None
+        self._seq_thread = None
 
     # ------------------------------------------------------------------ #
     # NARZĘDZIA                                                            #
@@ -142,10 +146,7 @@ class TestScreen:
             pass
 
     def _interlock_active(self) -> bool:
-        return bool(self.fixture is not None and self._fixture_ok and self.config.INTERLOCK_ENABLED)
-
-    def _fixture_needed(self) -> bool:
-        return bool(self.config.INTERLOCK_ENABLED or self.config.RELAYS_ENABLED)
+        return bool(self.interlock is not None and self._interlock_ok and self.config.INTERLOCK_ENABLED)
 
     # ------------------------------------------------------------------ #
     # BUDOWA EKRANU                                                        #
@@ -258,14 +259,15 @@ class TestScreen:
         right = tk.Frame(inner, bg=c.COLOR_WHITE)
         right.pack(side=tk.RIGHT)
         self.badges = {}
-        for key, label in (("chroma", "Chroma 19052"), ("oel", "OEL8512"), ("fixture", "Arduino/STM")):
+        for key, label in (("chroma", "Chroma 19052"), ("oel", "OEL8512"), ("interlock", "Interlock"),
+                           ("relay", "Przekaźnik")):
             lb = tk.Label(right, text=f"● {label}", bg=c.COLOR_WHITE, fg=C_IDLE,
                           font=("Arial", 10, "bold"), padx=6)
             lb.pack(side=tk.LEFT)
             self.badges[key] = (lb, label)
-        self.path_label = tk.Label(right, text="Tor: —", bg="#ECEFF1", fg="#333",
-                                   font=("Arial", 10, "bold"), padx=8, pady=2)
-        self.path_label.pack(side=tk.LEFT, padx=(10, 0))
+        self.relay_label = tk.Label(right, text="Przekaźnik: —", bg="#ECEFF1", fg="#333",
+                                    font=("Arial", 10, "bold"), padx=8, pady=2)
+        self.relay_label.pack(side=tk.LEFT, padx=(10, 0))
 
     def _badge(self, key, state, extra=""):
         lb, label = self.badges[key]
@@ -286,21 +288,21 @@ class TestScreen:
             tk.Label(g, text=val, bg=c.COLOR_WHITE, fg="#333", font=("Arial", 10, "bold")
                      ).grid(row=r, column=col + 1, sticky="w", padx=(0, 26))
 
-        tk.Label(g, text="HI-POT", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
-                 font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 12))
-        item(0, 1, "Tryb:", p["mode"])
-        item(0, 3, "Napięcie:", f"{p['voltage']} V ±{p.get('voltage_tolerance', 0)} V")
-        item(0, 5, "Prąd:", f"{p['current_limit_low']}–{p['current_limit_high']} mA")
-        item(0, 7, "Czas:", f"{hipot_runner.total_time(p):g} s")
         tk.Label(g, text="OBCIĄŻENIE", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
-                 font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 12))
+                 font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 12))
         if self.load_enabled:
-            item(1, 1, "Okno V:", f"{ld['v_min']}–{ld['v_max']} V")
-            item(1, 3, "Punkty CC:", f"{ld['i_min']} A / {ld['i_max']} A")
-            item(1, 5, "Nominal:", f"{ld.get('v_nominal', '?')} V")
-            item(1, 7, "Ustalanie:", f"{ld.get('power_on_delay', 2)} s + {ld.get('settle_time', 1)} s/pkt")
+            item(0, 1, "Okno V:", f"{ld['v_min']}–{ld['v_max']} V")
+            item(0, 3, "Punkty CC:", f"{ld['i_min']} A / {ld['i_max']} A")
+            item(0, 5, "Nominal:", f"{ld.get('v_nominal', '?')} V")
+            item(0, 7, "Ustalanie:", f"{ld.get('power_on_delay', 2)} s + {ld.get('settle_time', 1)} s/pkt")
         else:
-            item(1, 1, "", "wyłączone w profilu — tylko Hi-Pot")
+            item(0, 1, "", "wyłączone w profilu — tylko Hi-Pot")
+        tk.Label(g, text="HI-POT", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
+                 font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 12))
+        item(1, 1, "Tryb:", p["mode"])
+        item(1, 3, "Napięcie:", f"{p['voltage']} V ±{p.get('voltage_tolerance', 0)} V")
+        item(1, 5, "Prąd:", f"{p['current_limit_low']}–{p['current_limit_high']} mA")
+        item(1, 7, "Czas:", f"{hipot_runner.total_time(p):g} s")
 
     # ---------------------------- panele na żywo ----------------------- #
     def _create_live_area(self):
@@ -314,13 +316,14 @@ class TestScreen:
         if self.seq_mode:
             self.step_label.pack(anchor="w")
 
-        self.hp_panel = self._make_panel("1. HI-POT", [("NAPIĘCIE", "hp_v", "0 V"),
-                                                       ("PRĄD", "hp_i", "0.000 mA"),
-                                                       ("CZAS", "hp_t", "0.0 s")])
-        self.ld_panel = self._make_panel("2. OBCIĄŻENIE", [("PUNKT", "ld_pt", "—"),
+        n_hp = "2. HI-POT" if self.load_enabled else "HI-POT"
+        self.ld_panel = self._make_panel("1. OBCIĄŻENIE", [("PUNKT", "ld_pt", "—"),
                                                            ("NAPIĘCIE", "ld_v", "0.000 V"),
                                                            ("PRĄD", "ld_i", "0.000 A"),
                                                            ("MOC", "ld_p", "0.00 W")])
+        self.hp_panel = self._make_panel(n_hp, [("NAPIĘCIE", "hp_v", "0 V"),
+                                                ("PRĄD", "hp_i", "0.000 mA"),
+                                                ("CZAS", "hp_t", "0.0 s")])
         pt = tk.Frame(self.ld_panel, bg=c.COLOR_WHITE)
         pt.pack(pady=(0, 8))
         self.point_labels = {}
@@ -331,7 +334,7 @@ class TestScreen:
             self.point_labels[name] = lb
         if not self.load_enabled:
             self._cfg(self.ld_panel.verdict, text="WYŁĄCZONY", bg="#ECEFF1", fg="#888")
-        self._layout_panels(active="hipot")
+        self._layout_panels(active="load" if self.load_enabled else "hipot")
 
     def _make_panel(self, title, fields):
         c = self.config
@@ -364,14 +367,15 @@ class TestScreen:
         for p in (self.hp_panel, self.ld_panel):
             p.pack_forget()
         if not self.seq_mode:
-            self.hp_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
-            self.ld_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
+            self.ld_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
+            self.hp_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
             return
         panel = self.ld_panel if active == "load" else self.hp_panel
         panel.pack(fill=tk.BOTH, expand=True)
-        steps = 2 if self.load_enabled else 1
-        txt = (f"Krok 2/{steps}: OBCIĄŻENIE" if active == "load"
-               else f"Krok 1/{steps}: HI-POT")
+        if self.load_enabled:
+            txt = "Krok 1/2: OBCIĄŻENIE" if active == "load" else "Krok 2/2: HI-POT"
+        else:
+            txt = "Krok 1/1: HI-POT"
         self._cfg(self.step_label, text=txt)
 
     def _set_verdict(self, panel, status, reason=""):
@@ -403,7 +407,9 @@ class TestScreen:
             pass
 
     def _expected_duration(self):
-        t = hipot_runner.total_time(self.tp) + 1.0
+        c = self.config
+        t = hipot_runner.total_time(self.tp) + 1.0 + float(c.HV_DISCHARGE_S) \
+            + 2 * int(c.RELAY_SETTLE_MS) / 1000.0
         if self.load_enabled:
             ld = self.ld
             t += float(ld.get("power_on_delay", 2)) + 2 * (float(ld.get("settle_time", 1))
@@ -413,7 +419,7 @@ class TestScreen:
     def _create_interlock_bar(self):
         self.interlock_frame = tk.Frame(self.main, bg="#fff8e1", relief=tk.RAISED, borderwidth=2)
         self.interlock_frame.pack(fill=tk.X, pady=(0, 6))
-        self.interlock_label = tk.Label(self.interlock_frame, text="⏳ Łączenie z Arduino/STM...",
+        self.interlock_label = tk.Label(self.interlock_frame, text="⏳ Łączenie z interlockiem...",
                                         bg="#fff8e1", fg=C_WARN, font=("Arial", 11, "bold"))
         self.interlock_label.pack(pady=6)
 
@@ -467,8 +473,8 @@ class TestScreen:
                   command=self._show_stats).pack(side=tk.LEFT)
         hdr = tk.Frame(outer, bg=c.COLOR_PRIMARY)
         hdr.pack(fill=tk.X, padx=10)
-        self._hist_cols = [("Czas", 9), ("Numer seryjny", 24), ("Profil", 16), ("Hi-Pot", 10),
-                           ("Obciążenie", 11), ("Wynik", 10)]
+        self._hist_cols = [("Czas", 9), ("Numer seryjny", 24), ("Profil", 16), ("Obciążenie", 11),
+                           ("Hi-Pot", 10), ("Wynik", 10)]
         for text, w in self._hist_cols:
             tk.Label(hdr, text=text, bg=c.COLOR_PRIMARY, fg="white", font=("Arial", 8, "bold"),
                      width=w, pady=2).pack(side=tk.LEFT)
@@ -495,8 +501,8 @@ class TestScreen:
             row.pack(fill=tk.X)
             vals = [(e["time"], "#666"), (e["serial"] + (" ⚠" if e["duplicate"] else ""),
                                           C_WARN if e["duplicate"] else "#333"),
-                    (e["model"], "#333"), (STATUS_TXT.get(e["hipot"], e["hipot"]), _status_color(e["hipot"])),
-                    (STATUS_TXT.get(e["load"], e["load"]), _status_color(e["load"])),
+                    (e["model"], "#333"), (STATUS_TXT.get(e["load"], e["load"]), _status_color(e["load"])),
+                    (STATUS_TXT.get(e["hipot"], e["hipot"]), _status_color(e["hipot"])),
                     (STATUS_TXT.get(e["result"], e["result"]), _status_color(e["result"]))]
             for (text, fg), (_, w) in zip(vals, self._hist_cols):
                 tk.Label(row, text=text, bg=bg, fg=fg, font=("Arial", 8, "bold"), width=w,
@@ -534,7 +540,8 @@ class TestScreen:
         self._cfg(self.status_label, text="⏳ Łączenie z urządzeniami...", fg=C_WARN)
         self._badge("chroma", "busy")
         self._badge("oel", "busy" if self.load_enabled else "off")
-        self._badge("fixture", "busy" if self._fixture_needed() else "off")
+        self._badge("interlock", "busy" if self.config.INTERLOCK_ENABLED else "off")
+        self._badge("relay", "busy")
         self._cfg(self.reconnect_button, state="disabled")
         threading.Thread(target=self._connect_worker, daemon=True).start()
 
@@ -577,30 +584,25 @@ class TestScreen:
             self._oel_ok = oel_ok
             self._ui(self._on_oel_ready, oel_ok, info)
 
-        # --- Arduino / STM
-        if self._fixture_needed():
-            if cfg.SIMULATION:
-                from simulators import SimFixture
-                fx = SimFixture("SIM", cfg.INTERLOCK_BAUDRATE, relays_enabled=cfg.RELAYS_ENABLED)
-            else:
-                from interlock import InterlockMonitor
-                fx = InterlockMonitor(cfg.INTERLOCK_PORT, cfg.INTERLOCK_BAUDRATE,
-                                      relays_enabled=cfg.RELAYS_ENABLED)
-            fx_ok = fx.connect()
-            if not self._alive():
-                fx.disconnect()
-                return
-            if fx_ok:
-                self.fixture = fx
-                self._fixture_ok = True
-                fx.set_on_change(self._on_fixture_change)
-                fx.set_on_path(lambda p: self._ui(self._apply_path, p))
-                fx.start_monitoring()
-                if cfg.RELAYS_ENABLED:
-                    fx.set_path("OFF", timeout=1.0)
-            self._ui(self._on_fixture_ready, fx_ok)
-        else:
-            self._ui(self._interlock_manual_mode, "⚠ Interlock i przekaźniki wyłączone — tryb ręczny")
+        # --- Interlock (klapa) + przekaźnik
+        from relay import open_fixture
+        il, rl, msgs = open_fixture(cfg, interlock_needed=bool(cfg.INTERLOCK_ENABLED))
+        if not self._alive():
+            for d in (rl, il):
+                if d is not None:
+                    d.disconnect()
+            return
+        self.interlock, self._interlock_ok = il, il is not None
+        self.relay, self._relay_ok = rl, rl is not None
+        if il is not None:
+            il.set_on_change(self._on_interlock_change)
+        if rl is not None:
+            rl.set_on_mode(lambda m: self._ui(self._apply_relay_mode, m))
+            ok, msg = rl.set_mode("LOAD")          # stan spoczynkowy modułu
+            if not ok:
+                msgs.append(msg)
+                self._relay_ok = False
+        self._ui(self._on_fixture_ready, msgs)
         self._ui(self._after_connect)
 
     def _on_chroma_ready(self, ok, cfg_ok):
@@ -619,18 +621,22 @@ class TestScreen:
             self._badge("oel", "err")
             self._cfg(self.status_label, text=f"✗ OEL8512 ({self.config.OEL_PORT}): {info}", fg=C_ERR)
 
-    def _on_fixture_ready(self, ok):
-        if ok:
-            self._badge("fixture", "ok")
-            if self.config.INTERLOCK_ENABLED:
-                self._cfg(self.interlock_label, text="⏳ Oczekiwanie na stan klapy...", fg=C_WARN,
-                          bg="#fff8e1")
-            else:
-                self._interlock_manual_mode("⚠ Interlock wyłączony — przekaźniki aktywne, start ręczny")
+    def _on_fixture_ready(self, msgs):
+        cfg = self.config
+        self._badge("relay", "ok" if self._relay_ok else "err")
+        if not cfg.INTERLOCK_ENABLED:
+            self._badge("interlock", "off")
+            self._interlock_manual_mode("⚠ Interlock wyłączony (ENG → Interlock) — start ręczny")
+        elif self._interlock_ok:
+            self._badge("interlock", "ok")
+            self._cfg(self.interlock_label, text="⏳ Oczekiwanie na stan klapy...", fg=C_WARN,
+                      bg="#fff8e1")
         else:
-            self._badge("fixture", "err")
-            self._interlock_manual_mode(f"✗ Brak połączenia z Arduino/STM ({self.config.INTERLOCK_PORT})",
-                                        True)
+            self._badge("interlock", "err")
+            self._interlock_manual_mode(f"✗ Brak połączenia z interlockiem ({cfg.INTERLOCK_PORT})", True)
+        if msgs:
+            print("[FIXTURE] " + " | ".join(msgs))
+            self._cfg(self.status_label, text="✗ " + msgs[-1], fg=C_ERR)
 
     def _after_connect(self):
         self._cfg(self.reconnect_button, state="normal")
@@ -649,13 +655,13 @@ class TestScreen:
         if self.test_running:
             return
         self._disconnect_devices()
-        self._chroma_ok = self._oel_ok = self._fixture_ok = False
+        self._chroma_ok = self._oel_ok = self._interlock_ok = self._relay_ok = False
         self._connect_all()
 
     def _disconnect_devices(self):
-        fx, oel, ch = self.fixture, self.oel, self.chroma
-        self.fixture = self.oel = self.chroma = None
-        for d in (fx, oel, ch):
+        rl, il, oel, ch = self.relay, self.interlock, self.oel, self.chroma
+        self.relay = self.interlock = self.oel = self.chroma = None
+        for d in (rl, il, oel, ch):
             if d is not None:
                 try:
                     d.disconnect()
@@ -663,37 +669,55 @@ class TestScreen:
                     pass
 
     # ------------------------------------------------------------------ #
-    # INTERLOCK / TOR                                                      #
+    # INTERLOCK / PRZEKAŹNIK                                                    #
     # ------------------------------------------------------------------ #
     def _interlock_manual_mode(self, text, is_error=False):
         bg = "#ffebee" if is_error else "#fff8e1"
         self._cfg(self.interlock_label, text=text, fg=C_ERR if is_error else C_WARN, bg=bg)
         self._cfg(self.interlock_frame, bg=bg)
 
-    def _on_fixture_change(self, state):
-        """Wątek monitora Arduino: przerwanie sekwencji od razu, bez czekania na pętlę Tk."""
-        if self.test_running and (state is None or (state is False and self.config.INTERLOCK_ENABLED)):
+    def _on_interlock_change(self, state):
+        """Wątek monitora klapy: przerwanie sekwencji od razu (obciążenie i Hi-Pot)."""
+        if self.test_running and self.config.INTERLOCK_ENABLED and state is not True:
             self._abort.set()
+            oel = self.oel
+            if oel is not None:
+                try:
+                    oel.safe_off()
+                except Exception:
+                    pass
         self._ui(self._apply_interlock_state, state)
 
-    def _apply_path(self, path):
-        colors = {"OFF": ("#ECEFF1", "#333"), "HIPOT": ("#ffebee", C_ERR), "LOAD": ("#e3f2fd", "#1565C0")}
-        bg, fg = colors.get(path, ("#ECEFF1", "#333"))
-        txt = {"OFF": "Tor: OFF", "HIPOT": "Tor: HI-POT ⚡", "LOAD": "Tor: OBCIĄŻENIE 230V"}.get(path, path)
-        self._cfg(self.path_label, text=txt, bg=bg, fg=fg)
+    def _apply_relay_mode(self, mode):
+        colors = {"HIPOT": ("#ffebee", C_ERR), "LOAD": ("#e3f2fd", "#1565C0")}
+        bg, fg = colors.get(mode, ("#ECEFF1", "#333"))
+        txt = {"HIPOT": "Przekaźnik: HI-POT ⚡", "LOAD": "Przekaźnik: LOAD"}.get(mode, f"Przekaźnik: {mode}")
+        self._cfg(self.relay_label, text=txt, bg=bg, fg=fg)
+        if mode == "HIPOT":
+            self._watch_relay_revert()
+
+    def _watch_relay_revert(self):
+        """Moduł sam wraca do 'load' po RELAY_REVERT_S — odśwież etykietę."""
+        rl = self.relay
+        if self._closed or rl is None:
+            return
+        if rl.mode == "HIPOT":
+            self.parent.after(500, self._watch_relay_revert)
+        else:
+            self._apply_relay_mode(rl.mode or "LOAD")
 
     def _apply_interlock_state(self, closed):
         if closed is None:
-            self._cfg(self.interlock_label, text="⚠ Utracono połączenie z Arduino/STM — próba wznowienia",
+            self._cfg(self.interlock_label, text="⚠ Utracono połączenie z interlockiem — próba wznowienia",
                       fg=C_WARN, bg="#fff8e1")
             self._cfg(self.interlock_frame, bg="#fff8e1")
-            self._badge("fixture", "err")
+            self._badge("interlock", "err")
             self._pending_start = False
             if self.test_running:
                 self._abort_test("Utrata interlocka w trakcie testu")
             self._prev_interlock_closed = None
             return
-        self._badge("fixture", "ok")
+        self._badge("interlock", "ok")
         if not self.config.INTERLOCK_ENABLED:
             return
         if closed:
@@ -729,14 +753,16 @@ class TestScreen:
         p = []
         if not (self.chroma and self._chroma_ok):
             p.append("Hi-Pot niepołączony lub nieskonfigurowany")
-        if self.load_enabled:
-            if not (self.oel and self._oel_ok and self.oel.connected):
-                p.append("OEL8512 niepołączony — test obciążenia niemożliwy")
-            if not self.config.RELAYS_ENABLED:
-                p.append("Test obciążenia wymaga przekaźników (ENG → Arduino/STM)")
-        if self.config.RELAYS_ENABLED and not (self.fixture and self._fixture_ok):
-            p.append("Brak połączenia z Arduino/STM (przekaźniki)")
-        if not ignore_lid and self._interlock_active() and self.fixture.is_closed is not True:
+        fits, why = hipot_fits(self.config, self.tp)
+        if not fits:
+            p.append(why)
+        if self.load_enabled and not (self.oel and self._oel_ok and self.oel.connected):
+            p.append("OEL8512 niepołączony — test obciążenia niemożliwy")
+        if not (self.relay and self._relay_ok and self.relay.connected):
+            p.append(f"Brak połączenia z przekaźnikiem ({self.config.RELAY_PORT})")
+        if self.config.INTERLOCK_ENABLED and not self._interlock_active():
+            p.append(f"Brak połączenia z interlockiem ({self.config.INTERLOCK_PORT})")
+        if not ignore_lid and self._interlock_active() and self.interlock.is_closed is not True:
             p.append("Zamknij klapę, aby rozpocząć test")
         return p
 
@@ -766,7 +792,7 @@ class TestScreen:
             return
         t = self._abort_thread
         if t is not None and t.is_alive():
-            t.join(timeout=3.0)              # poprzednie STOP musi skończyć PATH OFF / INP 0
+            t.join(timeout=3.0)              # poprzednie STOP musi skończyć HV OFF / INP 0
             if t.is_alive():
                 self._cfg(self.status_label, text="⏳ Kończenie poprzedniego zatrzymania — spróbuj ponownie",
                           fg=C_WARN)
@@ -775,9 +801,9 @@ class TestScreen:
         self._abort.clear()
         self._t0 = time.time()
         self._reset_live()
-        self._set_verdict(self.hp_panel, "RUN")
-        self._set_verdict(self.ld_panel, "WAIT" if self.load_enabled else SKIP)
-        self._layout_panels("hipot")
+        self._set_verdict(self.ld_panel, "RUN" if self.load_enabled else SKIP)
+        self._set_verdict(self.hp_panel, "WAIT" if self.load_enabled else "RUN")
+        self._layout_panels("load" if self.load_enabled else "hipot")
         for w, st in ((self.start_button, "disabled"), (self.stop_button, "normal"),
                       (self.back_button, "disabled"), (self.next_sn_button, "disabled"),
                       (self.reconnect_button, "disabled")):
@@ -786,7 +812,8 @@ class TestScreen:
         if self.config.SIMULATION:
             import simulators
             simulators.set_fault_from_serial(self.serial_number)
-        threading.Thread(target=self._sequence_worker, daemon=True).start()
+        self._seq_thread = threading.Thread(target=self._sequence_worker, daemon=True)
+        self._seq_thread.start()
         self._tick_progress()
 
     def _tick_progress(self):
@@ -809,23 +836,29 @@ class TestScreen:
     # ------------------------------------------------------------------ #
     def _sequence_worker(self):
         seq = ComboSequence(
-            self.config, self.model_info, self.chroma, self.oel, self.fixture, self._abort,
+            self.config, self.model_info, self.chroma, self.oel, self.relay,
+            self.interlock if self._interlock_active() else None, self._abort,
             on_phase=lambda s, t: self._ui(self._on_phase, s, t),
             on_hipot_live=lambda v, i, t: self._ui(self._on_hipot_live, v, i, t),
             on_hipot_done=lambda v: self._ui(self._on_hipot_done, v),
             on_load_live=lambda d: self._ui(self._on_load_live, d),
+            on_load_done=lambda lv: self._ui(self._show_load_points, lv),
             save_hipot=self._save_hipot, save_load=self._save_load)
         try:
             res = seq.run()
         except Exception as e:
             from combo_sequence import ComboResult
             res = ComboResult(INVALID, f"Błąd sekwencji: {e}")
+            res.load_status = INVALID if self.load_enabled else "OFF"
         self._ui(self._on_sequence_done, res)
 
     def _on_phase(self, step, text):
         if step == "LOAD":
             self._layout_panels("load")
             self._set_verdict(self.ld_panel, "RUN")
+        elif step == "HIPOT":
+            self._layout_panels("hipot")
+            self._set_verdict(self.hp_panel, "RUN")
         if step != "END" and text:
             self._cfg(self.status_label, text=f"🔄 {text}", fg=C_WARN)
 
@@ -841,11 +874,24 @@ class TestScreen:
                           "" if verdict.result == PASS else verdict.reason)
 
     def _on_load_live(self, d):
-        self._cfg(self.ld_pt, text=f"{d['point']} {d['i_set']:.2f}A" if d["point"] not in ("", "START")
-                  else "START")
+        pt = d["point"]
+        self._cfg(self.ld_pt, text=f"{pt} {d['i_set']:.2f}A" if pt in ("MIN", "MAX") else (pt or "—"))
         self._cfg(self.ld_v, text=f"{d['v']:.3f} V")
         self._cfg(self.ld_i, text=f"{d['i']:.3f} A")
         self._cfg(self.ld_p, text=f"{d['p']:.2f} W")
+
+    def _show_load_points(self, lv):
+        for pr in lv.points:
+            ok = pr.result == PASS
+            lb = self.point_labels.get(pr.name)
+            if lb is None:                           # NC — zasilacz niepodłączony
+                lb = self.point_labels["MIN"]
+                self._cfg(lb, text=f"Brak napięcia: {pr.v:.2f} V  ✗", bg="#ffebee", fg=C_ERR)
+                continue
+            self._cfg(lb, text=f"{pr.name} {pr.i_set:.2f} A:  {pr.v:.3f} V / {pr.i:.3f} A  "
+                               f"{'✓' if ok else '✗'}",
+                      bg="#e8f5e9" if ok else "#ffebee", fg=C_OK if ok else C_ERR)
+        self._set_verdict(self.ld_panel, lv.result, "" if lv.result == PASS else lv.reason)
 
     # ------------------------------------------------------------------ #
     # RAPORTY (wołane z wątku roboczego)                                   #
@@ -897,44 +943,42 @@ class TestScreen:
             self._cfg(w, state=st)
 
         # Panele
-        if res.hipot is None:
-            self._set_verdict(self.hp_panel, res.overall if res.overall in (ABORTED, INVALID) else "WAIT",
-                              res.reason)
         if res.load is not None:
-            for pr in res.load.points:
-                ok = pr.result == PASS
-                self._cfg(self.point_labels[pr.name],
-                          text=f"{pr.name} {pr.i_set:.2f} A:  {pr.v:.3f} V / {pr.i:.3f} A  "
-                               f"{'✓' if ok else '✗'}",
-                          bg="#e8f5e9" if ok else "#ffebee", fg=C_OK if ok else C_ERR)
-            self._set_verdict(self.ld_panel, res.load.result,
-                              "" if res.load.result == PASS else res.load.reason)
-        elif self.load_enabled:
-            if res.load_status in (INVALID, ABORTED):
-                self._set_verdict(self.ld_panel, res.load_status, res.reason)
-            elif res.hipot_status in (FAIL, INVALID):
-                self._set_verdict(self.ld_panel, SKIP, "Pominięty — Hi-Pot nie przeszedł")
+            self._show_load_points(res.load)
+        elif self.load_enabled and res.load_status in (INVALID, ABORTED):
+            self._set_verdict(self.ld_panel, res.load_status, res.reason)
+        if res.hipot is None:
+            if res.hipot_skipped and res.overall not in (ABORTED,):
+                self._set_verdict(self.hp_panel, SKIP, f"Pominięty — {res.hipot_skipped}"
+                                  if res.load_status in (FAIL, INVALID) else res.reason)
+            elif res.overall in (ABORTED, INVALID):
+                self._set_verdict(self.hp_panel, res.overall if res.load_status != ABORTED else SKIP,
+                                  res.reason if res.load_status != ABORTED else "Pominięty — przerwano")
+            else:
+                self._set_verdict(self.hp_panel, "WAIT")
         if self.seq_mode:
-            self._layout_panels("load" if res.load is not None else "hipot")
+            self._layout_panels("hipot" if res.hipot is not None or not self.load_enabled else "load")
             self._cfg(self.step_label,
-                      text=f"Hi-Pot: {STATUS_TXT.get(res.hipot_status)}   |   "
-                           f"Obciążenie: {STATUS_TXT.get(res.load_status, res.load_status)}")
+                      text=f"Obciążenie: {STATUS_TXT.get(res.load_status, res.load_status)}   |   "
+                           f"Hi-Pot: {STATUS_TXT.get(res.hipot_status)}")
 
         if res.relay_alarm:
-            messagebox.showerror("ALARM — przekaźniki", res.reason, parent=self.parent)
+            messagebox.showwarning("Przekaźnik", "Przekaźnik nie potwierdził powrotu do 'load' po Hi-Pot.\n"
+                                   "Sprawdź połączenie z modułem przekaźników (ENG → Przekaźnik).",
+                                   parent=self.parent)
         if res.overall == ABORTED:
-            saved = " (raport Hi-Pot już zapisany)" if res.hipot_report else ""
+            saved = " (raport obciążenia już zapisany)" if res.load_report else ""
             self._cfg(self.status_label, text=f"⛔ {res.reason} — wynik całkowity NIE zapisany{saved}",
                       fg=C_ERR)
             self._cfg(self.start_button, state="normal" if not self._interlock_active() else "disabled")
             return
 
         if res.overall == INVALID:
-            saved_hp = " (raport Hi-Pot zapisany)" if res.hipot_report else ""
-            self._cfg(self.status_label, text=f"✗ TEST NIEWAŻNY — powtórz{saved_hp}", fg=C_ERR)
+            saved_ld = " (raport obciążenia zapisany)" if res.load_report else ""
+            self._cfg(self.status_label, text=f"✗ TEST NIEWAŻNY — powtórz{saved_ld}", fg=C_ERR)
             messagebox.showerror("Test nieważny",
                                  f"{res.reason}\n\nWynik całkowity NIE został zapisany ani policzony"
-                                 f"{saved_hp}.\nSprawdź podłączenie i powtórz test.",
+                                 f"{saved_ld}.\nSprawdź podłączenie i powtórz test.",
                                  parent=self.parent)
             self.parent.after(200, lambda: self.show_result_and_next_serial("NIEWAŻNY"))
             return
@@ -975,17 +1019,17 @@ class TestScreen:
         self._abort_test("Test przerwany przez operatora")
 
     def _abort_test(self, reason):
-        """Wysokie napięcie OFF, wejście OEL OFF, tor OFF — natychmiast, w tle."""
+        """HV OFF i wejście OEL OFF — natychmiast, w tle. Przekaźnik przełącza wyłącznie
+        sekwencja (po rozładowaniu HV), nigdy ten wątek."""
         was = self.test_running
         self._abort.set()
         self._cfg(self.stop_button, state="disabled")
         if was:
             self._cfg(self.status_label, text=f"⛔ {reason} — zatrzymywanie...", fg=C_ERR)
-        ch, oel, fx = self.chroma, self.oel, self.fixture
+        ch, oel = self.chroma, self.oel
 
         def worker():
-            for fn in (lambda: ch and ch.stop_test(), lambda: oel and oel.safe_off(),
-                       lambda: fx and self.config.RELAYS_ENABLED and fx.set_path("OFF", timeout=1.0)):
+            for fn in (lambda: ch and ch.stop_test(), lambda: oel and oel.safe_off()):
                 try:
                     fn()
                 except Exception as e:
@@ -1013,28 +1057,30 @@ class TestScreen:
             if e["serial"].upper() == serial.upper():
                 return {"found": True, "where": "session", "last_time": e["time"],
                         "last_result": e["result"]}
-        log_dir = self.config.resolve_log_dir()
-        if not os.path.isdir(log_dir):
-            return empty
         ss = self.shift_stats
         start, end = (ss.shift_start, ss.shift_end) if ss else (None, None)
-        pat = re.compile(r'^' + re.escape(serial.upper()) + r'_(\d{14})(?:_\d+)?\.txt$', re.IGNORECASE)
+        # Raporty Hi-Pot: SN_YYYYmmddHHMMSS.txt, obciążenia: SN_YYYYmmddHHMMSS_LOAD.txt
+        # (sztuka z FAIL obciążenia ma tylko raport LOAD — dlatego oba katalogi).
+        pat = re.compile(r'^' + re.escape(serial.upper()) + r'_(\d{14})(?:_\d+)?(?:_LOAD)?(?:_\d+)?\.txt$',
+                         re.IGNORECASE)
         matches = []
-        try:
-            for fn in os.listdir(log_dir):
-                m = pat.match(fn)
-                if not m:
-                    continue
-                try:
-                    ts = datetime.strptime(m.group(1), "%Y%m%d%H%M%S")
-                except ValueError:
-                    continue
-                if start and end and not (start <= ts < end):
-                    continue
-                matches.append(ts)
-        except Exception as e:
-            print(f"[DUP] Błąd przeglądania logów: {e}")
-            return empty
+        for log_dir in {self.config.resolve_log_dir(), self.config.resolve_load_log_dir()}:
+            if not os.path.isdir(log_dir):
+                continue
+            try:
+                for fn in os.listdir(log_dir):
+                    m = pat.match(fn)
+                    if not m:
+                        continue
+                    try:
+                        ts = datetime.strptime(m.group(1), "%Y%m%d%H%M%S")
+                    except ValueError:
+                        continue
+                    if start and end and not (start <= ts < end):
+                        continue
+                    matches.append(ts)
+            except Exception as e:
+                print(f"[DUP] Błąd przeglądania logów {log_dir}: {e}")
         if not matches:
             return empty
         return {"found": True, "where": "logs", "last_time": max(matches).strftime("%d.%m.%Y %H:%M"),
@@ -1047,7 +1093,7 @@ class TestScreen:
             if autostart:
                 self._maybe_start_test()
             return
-        where = "tej sesji" if dup.get("where") == "session" else f"logów Hi-Pot ({dup.get('last_time')})"
+        where = "tej sesji" if dup.get("where") == "session" else f"logów ({dup.get('last_time')})"
         last = f" (wynik: {STATUS_TXT.get(dup.get('last_result'), dup.get('last_result'))})" \
             if dup.get("last_result") else ""
         self._cfg(self.status_label, text=f"⚠ DUPLIKAT: SN {serial} był już testowany — {where}{last}",
@@ -1192,10 +1238,13 @@ class TestScreen:
     def _on_window_close(self):
         if self.test_running:
             if not messagebox.askyesno("Test w toku", "Test jest w toku. Zamknąć aplikację?\n"
-                                                      "HV, obciążenie i tory zostaną wyłączone.",
+                                                      "HV i obciążenie zostaną wyłączone.",
                                        parent=self.parent):
                 return
             self._abort_test("Zamknięcie aplikacji")
+            t = self._seq_thread
+            if t is not None and t.is_alive():
+                t.join(timeout=5.0)          # sekwencja: HV off -> rozładowanie -> 'load'
             time.sleep(0.3)
         self._shutdown_hardware()
         if self.app_ref is not None:

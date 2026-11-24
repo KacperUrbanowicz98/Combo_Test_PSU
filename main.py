@@ -3,7 +3,7 @@
 Reconext Combo Test PSU — stanowisko Hi-Pot (Chroma 19052) + obciążenie (OEL8512).
 
   python main.py          praca na sprzęcie
-  python main.py --sim    symulacja Chromy, OEL8512 i Arduino/STM (bez sprzętu)
+  python main.py --sim    symulacja Chromy, OEL8512, interlocka i przekaźnika (bez sprzętu)
 """
 import argparse
 import os

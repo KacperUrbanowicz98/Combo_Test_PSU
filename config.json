@@ -1,53 +1,35 @@
 {
-  "connection": {
-    "transport": "serial",
-    "port": "COM6",
-    "port_vid_pid": "067B:23A3",
-    "baudrate": 115200,
-    "bytesize": 8,
-    "parity": "N",
-    "stopbits": 1,
-    "timeout_s": 1.0,
-    "tx_terminator": "\\n",
-    "rx_terminator": "\\n",
-    "inter_cmd_delay_ms": 60,
-    "visa_resource": ""
+  "hipot": {
+    "com_port": "COM6",
+    "baudrate": 9600
   },
-  "test": {
-    "num_abs_tol": 0.0011,
-    "num_rel_tol": 0.002,
-    "retries_on_timeout": 1,
-    "rst_wait_ms": 20000,
-    "remote_before_test": true,
-    "local_after_test": true,
-    "rst_after_test": false,
-    "require_input_confirm": true,
-    "reports_dir": "reports"
+  "oel": {
+    "com_port": "COM6",
+    "vid_pid": "067B:23A3",
+    "baudrate": 115200,
+    "timeout_s": 1.0,
+    "inter_cmd_delay_ms": 60,
+    "terminator": "\\n"
+  },
+  "fixture": {
+    "com_port": "COM5",
+    "baudrate": 9600,
+    "interlock_enabled": true,
+    "relays_enabled": true,
+    "relay_timeout_s": 3.0
+  },
+  "general": {
+    "station_name": "",
+    "display_mode": "both",
+    "auto_save_results": true,
+    "test_timeout": 300,
+    "log_dir": "logs",
+    "load_log_dir": "logs_load",
+    "eng_log_dir": "logs_eng"
   },
   "security": {
     "salt": "oel85-reconext",
     "eng_password_hash": "3664abc81c91d0d13ad514beb6dbe2a33aba6f28097cc060e47c4226026cdde6",
     "admin_password_hash": "0cc4cc4e588ea00a2fa512e6ab6562ed92e86077aa78c050f03abbfb78375cd0"
-  },
-  "ui": {
-    "last_groups": [
-      "ieee",
-      "syst",
-      "mode",
-      "inp",
-      "volt",
-      "curr",
-      "res",
-      "pow",
-      "dyn",
-      "bat",
-      "batrun",
-      "ocp",
-      "opp",
-      "meas",
-      "par",
-      "probe"
-    ]
-  },
-  "config_schema": 2
+  }
 }

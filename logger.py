@@ -147,6 +147,7 @@ LOAD_ERROR_CODES = {
     "LOAD-VHI":  "Output voltage above limit",
     "LOAD-I":    "Load current not reached (PSU cannot deliver set current)",
     "LOAD-PROT": "OEL8512 protection tripped (OVP/OCP/OPP)",
+    "LOAD-NC":   "No output voltage - PSU not connected or dead",
 }
 
 

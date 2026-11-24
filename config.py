@@ -6,7 +6,7 @@ import socket
 from app_paths import app_dir
 
 APP_NAME = "Combo Test PSU"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 def decode_term(s: str) -> str:
@@ -44,12 +44,22 @@ class Config:
     OEL_DELAY_MS = 60                # przerwa po zapisie; w tym oknie OEL odsyła ERR
     OEL_TERMINATOR = "\\n"           # TX i RX
 
-    # Arduino/STM — interlock klapy + przekaźniki torów
+    # Interlock klapy — Arduino (linie OPEN / CLOSED, jak w Hi-Pot PSU)
     INTERLOCK_PORT = "COM5"
     INTERLOCK_BAUDRATE = 9600
     INTERLOCK_ENABLED = True
-    RELAYS_ENABLED = True            # sterowanie torem HIPOT/LOAD przez Arduino/STM
-    RELAY_TIMEOUT = 3.0              # [s] czas na potwierdzenie "OK PATH ..."
+
+    # Przekaźnik (moduł przełączający zasilacz między testem obciążenia a Hi-Pot)
+    RELAY_PORT = "COM7"              # ten sam port co interlock = wspólne połączenie
+    RELAY_BAUDRATE = 9600
+    RELAY_CMD_LOAD = "load"          # komenda: test obciążenia (stan domyślny modułu)
+    RELAY_CMD_HIPOT = "hipot"        # komenda: Hi-Pot
+    RELAY_TERMINATOR = "\\n"
+    RELAY_ACK = ""                   # oczekiwana odpowiedź (fragment); pusto = bez potwierdzenia
+    RELAY_TIMEOUT = 2.0              # [s] czas na odpowiedź, gdy RELAY_ACK ustawione
+    RELAY_SETTLE_MS = 500            # [ms] po komendzie, zanim ruszy test
+    RELAY_REVERT_S = 30.0            # [s] moduł sam wraca do LOAD po braku aktywności
+    HV_DISCHARGE_S = 1.0             # [s] po Hi-Pot, zanim przekaźnik wróci na LOAD
 
     # Ogólne
     STATION_NAME = ""                # pusto = nazwa komputera
@@ -60,11 +70,6 @@ class Config:
     LOAD_LOG_DIR = "logs_load"       # raporty testu obciążenia (osobny plik na test)
     ENG_LOG_DIR = "logs_eng"         # testy w pętli z panelu ENG (nie trafiają do IFS)
 
-    # Hasła ENG/Admin — sha256(salt + hasło); puste = ustawiane domyślne przy starcie
-    PASSWORD_SALT = "combo-psu-reconext"
-    ENG_PASSWORD_HASH = ""
-    ADMIN_PASSWORD_HASH = ""
-
     # Tryb symulacji (tylko z linii poleceń: --sim) — nie zapisywany
     SIMULATION = False
 
@@ -73,20 +78,6 @@ class Config:
         self.SIMULATION = simulation
         self._sm = SettingsManager()
         self._sm.load_config(self)
-        self._ensure_passwords()
-
-    # ------------------------------------------------------------------ #
-    def _ensure_passwords(self):
-        import auth
-        changed = False
-        if not self.ENG_PASSWORD_HASH:
-            self.ENG_PASSWORD_HASH = auth.hash_password("eng123", self.PASSWORD_SALT)
-            changed = True
-        if not self.ADMIN_PASSWORD_HASH:
-            self.ADMIN_PASSWORD_HASH = auth.hash_password("admin123", self.PASSWORD_SALT)
-            changed = True
-        if changed:
-            self.save()
 
     def save(self) -> bool:
         return self._sm.save_config(self)

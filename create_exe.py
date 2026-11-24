@@ -12,10 +12,10 @@ import subprocess
 import sys
 
 APP = "Combo Test PSU"
-VERSION = (1, 0, 0, 0)
+VERSION = (1, 1, 0, 0)
 MODULES = ["app_paths", "config", "settings_manager", "auth", "models", "gui", "test_screen",
            "stats_window", "eng_panel", "hipot_device", "hipot_runner", "result_validator",
-           "interlock", "load_tester", "combo_sequence", "oel85", "transport", "simulator",
+           "interlock", "relay", "load_tester", "combo_sequence", "oel85", "transport", "simulator",
            "simulators", "logger", "stats_manager", "shift_stats"]
 
 

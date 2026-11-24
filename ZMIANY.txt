@@ -1,3 +1,23 @@
+Combo Test PSU — v1.1.0
+
+- Kolejność testu: najpierw OBCIĄŻENIE, potem HI-POT. Obciążenie FAIL / NIEWAŻNY = Hi-Pot nie jest
+  wykonywany (zasilacz z FAIL nie dostaje wysokiego napięcia).
+- Kontrola podłączenia zasilacza: brak napięcia na wejściu OEL przed obciążeniem = FAIL (LOAD-NC).
+- Klapa nasłuchiwana przez cały test — otwarcie w trakcie obciążenia też przerywa test (OEL OFF).
+- Nowy moduł relay.py: przekaźnik przełączany komendami „load” / „hipot” (konfigurowalne: komendy,
+  terminator, opcjonalne potwierdzenie, czas ustalania). Wspólny port z interlockiem obsługiwany.
+- Moduł sam wraca do „load” po ~30 s: Hi-Pot ograniczony do tego okna (profil za długi blokowany przed
+  startem, w trakcie twardy limit), po Hi-Pot STOP -> rozładowanie -> „load”.
+- interlock.py: tylko klapa (usunięte PATH/keepalive); fixture_controller.ino usunięty.
+- Panel ENG: zakładki 1. Chroma Hi-Pot, 2. Test obciążenia OEL8512, 3. Przekaźnik (ręczne LOAD/HI-POT,
+  wysyłanie dowolnej linii z podglądem odpowiedzi), 4. Interlock, 5. Profile, 6. Logi, 7. Ogólne.
+  Usunięte szare notatki, zakładka „Hasła” i poziom Admin — jedno hasło ENG jak w pozostałych aplikacjach.
+- Ekran testu: „Tor” -> „Przekaźnik”, statusy Chroma / OEL8512 / Interlock / Przekaźnik, panele
+  1. OBCIĄŻENIE i 2. HI-POT, historia w kolejności obciążenie / Hi-Pot.
+- Duplikat SN sprawdzany także w katalogu raportów obciążenia (sztuka z FAIL obciążenia ma tylko raport LOAD).
+- Test w pętli (ENG): kolejność obciążenie -> Hi-Pot, zatrzymanie po pierwszym wyniku innym niż PASS.
+- Symulacja: usterka …NC (zasilacz niepodłączony), symulowany moduł przekaźników z powrotem do LOAD.
+
 Combo Test PSU — v1.0.0 (pierwsza wersja)
 
 Baza: Hi-Pot PSU 1.1.2 + OEL85 Verifier 1.2.4 (baseline OEL8512 FW V2.0.1)

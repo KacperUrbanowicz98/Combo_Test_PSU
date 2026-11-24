@@ -10,7 +10,9 @@ Zasady z baseline OEL85 Verifier 1.2.4 (BASELINE_OEL8512_FW201.md):
   * przed każdym testem ustawiany jest komplet parametrów;
   * bez *RST w cyklu testu.
 
-Test 2-punktowy (CC):
+Test 2-punktowy (CC), wykonywany jako PIERWSZY (przed Hi-Pot):
+  NC:  po power_on_delay przy wejściu OFF — brak napięcia = zasilacz niepodłączony
+       (LOAD-NC, FAIL; Hi-Pot nie jest wykonywany)
   MIN: i_min (0 A -> wejście OEL wyłączone, pomiar napięcia bez obciążenia)
   MAX: i_max
 PASS punktu: v_min <= V <= v_max, prąd pobierany zgodny z nastawą (tolerancja),
@@ -213,11 +215,20 @@ def _sleep_abortable(seconds: float, abort: threading.Event, tick=None, step=0.2
     return not abort.is_set()
 
 
+def nc_threshold(ld: dict) -> float:
+    """Poniżej tego napięcia (bez obciążenia) zasilacz uznajemy za niepodłączony."""
+    try:
+        v = float(ld.get("nc_v", 0) or 0)
+    except (TypeError, ValueError):
+        v = 0.0
+    return v if v > 0 else max(0.5, float(ld["v_min"]) * 0.3)
+
+
 def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
                   on_live: Optional[Callable[[dict], None]] = None,
                   on_phase: Optional[Callable[[str], None]] = None) -> LoadVerdict:
     """
-    Wywoływać PO przełączeniu toru na LOAD (zasilacz dostaje 230 V).
+    Wywoływać PO przełączeniu przekaźnika na 'load' (zasilacz dostaje 230 V).
     Zawsze kończy z wejściem OEL wyłączonym.
     """
     vmin, vmax = float(ld["v_min"]), float(ld["v_max"])
@@ -252,6 +263,23 @@ def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
         push(point="START", i_set=0.0)
         if not _sleep_abortable(float(ld.get("power_on_delay", 2.0)), abort, tick):
             return LoadVerdict(INVALID, "", "Test obciążenia przerwany")
+
+        # Zasilacz podłączony? (wejście OEL OFF, samo napięcie wyjściowe)
+        if on_phase:
+            on_phase("Sprawdzanie podłączenia zasilacza")
+        v0s = []
+        for _ in range(3):
+            v0, i0, _ = st.measure()
+            v0s.append(v0)
+            push(point="NC", v=v0, i=i0, p=v0 * i0)
+            time.sleep(0.1)
+        v0 = max(v0s)
+        thr = nc_threshold(ld)
+        if v0 < thr:
+            nc = PointResult("NC", 0.0, round(v0, 4), 0.0, FAIL,
+                             f"Brak napięcia z zasilacza ({v0:.2f} V < {thr:.2f} V) — "
+                             "zasilacz niepodłączony lub nie działa", "LOAD-NC")
+            return LoadVerdict(FAIL, "LOAD-NC", nc.reason, [nc])
 
         for name, i_set in points:
             if abort.is_set():

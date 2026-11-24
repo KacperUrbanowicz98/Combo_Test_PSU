@@ -3,13 +3,15 @@
 Panel inżynieryjny (ENG) — dostęp: Ctrl+Alt+D ×3 albo „⚙ Panel ENG” w stopce + hasło.
 
 Zakładki:
-  Chroma Hi-Pot   port/baudrate, test połączenia
-  OEL8512         port, VID:PID, baudrate, timeout, przerwa, terminator; test, odczyt, INP OFF
-  Arduino/STM     port, baudrate, interlock, przekaźniki; test klapy i torów
-  Profile         baza profili: włącz/wyłącz, dodaj, edytuj, usuń, test w pętli
-  Logi            katalogi raportów Hi-Pot (IFS), obciążenia, testów ENG
-  Ogólne          nazwa stanowiska, wariant widoku, autozapis, limit czasu
-  Hasła           (tylko Admin) zmiana haseł ENG/Admin
+  1. Chroma Hi-Pot            port/baudrate, test połączenia
+  2. Test obciążenia OEL8512  port, VID:PID, baudrate, timeout, przerwa, terminator; test, odczyt, INP OFF
+  3. Przekaźnik               port, komendy load/hipot, potwierdzenie, czasy; ręczne przełączanie,
+                              wysyłanie dowolnej linii i podgląd odpowiedzi modułu
+  4. Interlock                port, baudrate, włączony/wyłączony; podgląd klapy
+  5. Profile                  baza profili: włącz/wyłącz, dodaj, edytuj, usuń, test w pętli
+  6. Logi                     katalogi raportów Hi-Pot (IFS), obciążenia, testów ENG
+  7. Ogólne                   nazwa stanowiska, wariant widoku, autozapis, limit czasu
+Hasło: to samo co w pozostałych aplikacjach stanowiskowych (w auth.py tylko hash).
 """
 import copy
 import csv
@@ -42,9 +44,9 @@ def list_com_ports():
         return []
 
 
-def ask_password(root, cfg) -> int:
-    """Okno hasła. Zwraca auth.LEVEL_* (0 = brak dostępu)."""
-    result = {"level": auth.LEVEL_NONE}
+def ask_password(root, cfg) -> bool:
+    """Okno hasła ENG. True = dostęp."""
+    result = {"ok": False}
     w = tk.Toplevel(root)
     w.title("Panel ENG — logowanie")
     w.geometry("400x220")
@@ -56,7 +58,7 @@ def ask_password(root, cfg) -> int:
     f.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
     tk.Label(f, text="Panel inżynieryjny", bg=cfg.COLOR_WHITE, fg=cfg.COLOR_PRIMARY,
              font=("Arial", 14, "bold")).pack(pady=(18, 8))
-    tk.Label(f, text="Hasło ENG lub Admin:", bg=cfg.COLOR_WHITE, font=("Arial", 11)).pack()
+    tk.Label(f, text="Hasło:", bg=cfg.COLOR_WHITE, font=("Arial", 11)).pack()
     e = tk.Entry(f, font=("Arial", 12), width=20, justify="center", show="*", relief=tk.SOLID,
                  borderwidth=2)
     e.pack(pady=8)
@@ -65,10 +67,8 @@ def ask_password(root, cfg) -> int:
     err.pack()
 
     def ok(_=None):
-        lvl = auth.check_level(cfg, e.get())
-        print(f"[AUTH] Logowanie ENG: {'OK' if lvl else 'BŁĘDNE HASŁO'}")
-        if lvl:
-            result["level"] = lvl
+        if auth.check_password(e.get()):
+            result["ok"] = True
             w.destroy()
         else:
             err.config(text="Nieprawidłowe hasło!")
@@ -77,15 +77,15 @@ def ask_password(root, cfg) -> int:
     e.bind("<Return>", ok)
     w.bind("<Escape>", lambda _: w.destroy())
     root.wait_window(w)
-    return result["level"]
+    return result["ok"]
 
 
 class EngPanel:
 
-    def __init__(self, root, cfg, level):
-        self.root, self.cfg, self.level = root, cfg, level
+    def __init__(self, root, cfg):
+        self.root, self.cfg = root, cfg
         self.window = tk.Toplevel(root)
-        self.window.title("Panel inżynieryjny" + (" (Admin)" if level == auth.LEVEL_ADMIN else ""))
+        self.window.title("Panel inżynieryjny")
         self.window.configure(bg=cfg.COLOR_BG)
         w, h = 1060, 720
         self.window.geometry(f"{w}x{h}+{max(0, root.winfo_screenwidth() // 2 - w // 2)}+"
@@ -94,7 +94,8 @@ class EngPanel:
         self.window.grab_set()
         self.window.protocol("WM_DELETE_WINDOW", self._close)
         self.vars = {}
-        self._fixture = None            # połączenie testowe z Arduino/STM
+        self._il = None                 # połączenie testowe: interlock
+        self._rl = None                 # połączenie testowe: przekaźnik
         self._ports = list_com_ports()
         import queue as _q
         self._q = _q.Queue()            # zadania z wątków tła -> wątek GUI
@@ -112,12 +113,11 @@ class EngPanel:
         self.nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
         self._tab_chroma()
         self._tab_oel()
-        self._tab_fixture()
+        self._tab_relay()
+        self._tab_interlock()
         self._tab_profiles()
         self._tab_logs()
         self._tab_general()
-        if level == auth.LEVEL_ADMIN:
-            self._tab_passwords()
 
         bf = tk.Frame(self.window, bg=cfg.COLOR_BG)
         bf.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -207,10 +207,11 @@ class EngPanel:
                 setattr(self.cfg, attr, conv(raw) if not isinstance(raw, bool) else raw)
             except (TypeError, ValueError):
                 errors.append(attr)
-        try:
-            decode_term(self.cfg.OEL_TERMINATOR)
-        except Exception:
-            errors.append("OEL_TERMINATOR")
+        for attr in ("OEL_TERMINATOR", "RELAY_TERMINATOR"):
+            try:
+                decode_term(getattr(self.cfg, attr))
+            except Exception:
+                errors.append(attr)
         return errors
 
     # ------------------------------------------------------------------ #
@@ -220,8 +221,6 @@ class EngPanel:
         outer, b = self._page("Chroma Hi-Pot", "Połączenie RS232 — Chroma 19052")
         self._field(b, 0, "Port COM:", "DEFAULT_COM_PORT", "combo", self._port_values())
         self._field(b, 1, "Baudrate:", "DEFAULT_BAUDRATE", "combo", BAUDS, conv=int)
-        tk.Label(b, text="8N1, bez kontroli przepływu (sterownik Chromy).", bg=self.cfg.COLOR_WHITE,
-                 fg="#777", font=("Arial", 9)).grid(row=2, column=0, columnspan=2, sticky="w", pady=4)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
         bar.pack(anchor="w", padx=16, pady=8)
         st = self._status(outer)
@@ -252,7 +251,7 @@ class EngPanel:
     # OEL8512                                                              #
     # ------------------------------------------------------------------ #
     def _tab_oel(self):
-        outer, b = self._page("OEL8512", "Połączenie — OWON OEL8512 (baseline FW V2.0.1)")
+        outer, b = self._page("Test obciążenia OEL8512", "Połączenie — OWON OEL8512")
         pv = self._field(b, 0, "Port COM:", "OEL_PORT", "combo", self._port_values())
         vv = self._field(b, 1, "VID:PID (auto-wybór portu):", "OEL_VID_PID")
         self._field(b, 2, "Baudrate:", "OEL_BAUDRATE", "combo", BAUDS, conv=int)
@@ -265,9 +264,6 @@ class EngPanel:
                 if dev == pv.get() and vp:
                     vv.set(vp)
         pv.trace_add("write", pick_vid)
-        tk.Label(b, text="Domyślnie 115200 8N1, terminator \\n, przerwa 60 ms — jak w przebiegu "
-                         "referencyjnym weryfikatora.", bg=self.cfg.COLOR_WHITE, fg="#777",
-                 font=("Arial", 9)).grid(row=6, column=0, columnspan=2, sticky="w", pady=4)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
         bar.pack(anchor="w", padx=16, pady=8)
         st = self._status(outer)
@@ -308,92 +304,156 @@ class EngPanel:
             fg=C_OK if not isinstance(r, Exception) and r[0] else C_ERR))
 
     # ------------------------------------------------------------------ #
-    # ARDUINO / STM                                                        #
+    # PRZEKAŹNIK / INTERLOCK (wspólne połączenie testowe)                  #
     # ------------------------------------------------------------------ #
-    def _tab_fixture(self):
-        outer, b = self._page("Arduino/STM", "Interlock klapy + przekaźniki torów HI-POT / OBCIĄŻENIE")
+    def _tab_relay(self):
+        outer, b = self._page("Przekaźnik", "Moduł przekaźników — przełączanie LOAD / HI-POT")
+        self._field(b, 0, "Port COM:", "RELAY_PORT", "combo", self._port_values())
+        self._field(b, 1, "Baudrate:", "RELAY_BAUDRATE", "combo", BAUDS, conv=int)
+        self._field(b, 2, "Komenda — test obciążenia:", "RELAY_CMD_LOAD")
+        self._field(b, 3, "Komenda — Hi-Pot:", "RELAY_CMD_HIPOT")
+        self._field(b, 4, "Terminator:", "RELAY_TERMINATOR", "combo", TERMS)
+        self._field(b, 5, "Oczekiwana odpowiedź (pusto = brak):", "RELAY_ACK")
+        self._field(b, 6, "Timeout odpowiedzi [s]:", "RELAY_TIMEOUT", conv=float)
+        self._field(b, 7, "Ustalanie po przełączeniu [ms]:", "RELAY_SETTLE_MS", conv=int)
+        self._field(b, 8, "Powrót modułu do LOAD [s]:", "RELAY_REVERT_S", conv=float)
+        self._field(b, 9, "Rozładowanie HV przed LOAD [s]:", "HV_DISCHARGE_S", conv=float)
+        bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
+        bar.pack(anchor="w", padx=16, pady=8)
+        self._btn(bar, "🔌 Połącz / rozłącz", self._fixture_toggle)
+        self._btn(bar, "LOAD", lambda: self._relay_mode("LOAD"), "#1565C0")
+        self._btn(bar, "HI-POT", lambda: self._relay_mode("HIPOT"), C_ERR)
+        raw = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
+        raw.pack(anchor="w", padx=16, pady=(0, 4))
+        tk.Label(raw, text="Wyślij linię:", bg=self.cfg.COLOR_WHITE, font=("Arial", 10)).pack(side=tk.LEFT)
+        self.raw_var = tk.StringVar()
+        ent = tk.Entry(raw, textvariable=self.raw_var, width=24, relief=tk.SOLID, borderwidth=1)
+        ent.pack(side=tk.LEFT, padx=6)
+        ent.bind("<Return>", lambda _: self._relay_raw())
+        self._btn(raw, "Wyślij", self._relay_raw, "#607D8B")
+        self.rl_status = self._status(outer)
+        self.rl_live = tk.Label(outer, text="Przekaźnik: —", bg="#ECEFF1",
+                                font=("Arial", 12, "bold"), padx=10, pady=6)
+        self.rl_live.pack(anchor="w", padx=16, pady=6)
+
+    def _tab_interlock(self):
+        outer, b = self._page("Interlock", "Interlock klapy")
         self._field(b, 0, "Port COM:", "INTERLOCK_PORT", "combo", self._port_values())
         self._field(b, 1, "Baudrate:", "INTERLOCK_BAUDRATE", "combo", BAUDS, conv=int)
         self._field(b, 2, "Interlock klapy aktywny:", "INTERLOCK_ENABLED", "check")
-        self._field(b, 3, "Sterowanie przekaźnikami:", "RELAYS_ENABLED", "check")
-        self._field(b, 4, "Timeout potwierdzenia PATH [s]:", "RELAY_TIMEOUT", conv=float)
-        tk.Label(b, text="UWAGA: wyłączenie interlocka zdejmuje blokadę klapy (start ręczny). "
-                         "Bez przekaźników test obciążenia jest zablokowany.\n"
-                         "Ręcznie załączony tor wyłącza się po 5 s (watchdog Arduino/STM).",
-                 bg=self.cfg.COLOR_WHITE, fg=C_ERR, font=("Arial", 9, "bold")
-                 ).grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
         bar.pack(anchor="w", padx=16, pady=8)
-        self.fx_status = self._status(outer)
         self._btn(bar, "🔌 Połącz / rozłącz", self._fixture_toggle)
-        self._btn(bar, "Tor OFF", lambda: self._fixture_path("OFF"), "#607D8B")
-        self._btn(bar, "Tor HI-POT", lambda: self._fixture_path("HIPOT"), C_ERR)
-        self._btn(bar, "Tor OBCIĄŻENIE", lambda: self._fixture_path("LOAD"), "#1565C0")
-        self.fx_live = tk.Label(outer, text="Klapa: —   Tor: —", bg="#ECEFF1",
+        self.il_status = self._status(outer)
+        self.il_live = tk.Label(outer, text="Klapa: —", bg="#ECEFF1",
                                 font=("Arial", 12, "bold"), padx=10, pady=6)
-        self.fx_live.pack(anchor="w", padx=16, pady=6)
-        tk.Label(outer, text="Protokół i szkic referencyjny: fixture_controller.ino / README.md.",
-                 bg=self.cfg.COLOR_WHITE, fg="#777", font=("Arial", 9)).pack(anchor="w", padx=16)
+        self.il_live.pack(anchor="w", padx=16, pady=6)
+
+    def _fx_status(self, text, fg):
+        for lb in (self.rl_status, self.il_status):
+            lb.config(text=text, fg=fg)
 
     def _fixture_live(self):
-        fx = self._fixture
-        if fx is None or not self.window.winfo_exists():
+        if (self._il is None and self._rl is None) or not self.window.winfo_exists():
             return
-        lid = {True: "ZAMKNIĘTA", False: "OTWARTA", None: "nieznana"}[fx.is_closed]
-        self.fx_live.config(text=f"Klapa: {lid}   Tor: {fx.path}   Port: {'OK' if fx.connected else '✗'}")
+        il, rl = self._il, self._rl
+        if il is not None:
+            lid = {True: "ZAMKNIĘTA", False: "OTWARTA", None: "nieznana"}[il.is_closed]
+            self.il_live.config(text=f"Klapa: {lid}   Port: {'OK' if il.connected else '✗'}")
+        if rl is not None:
+            mode = rl.mode or "nieznany"
+            left = rl.hipot_time_left()
+            extra = f" (powrót do LOAD za {left:.0f} s)" if left > 0 else ""
+            self.rl_live.config(text=f"Przekaźnik: {mode}{extra}   Ostatnia odpowiedź: "
+                                     f"{rl.last_rx or '—'}   Port: {'OK' if rl.connected else '✗'}")
         self.window.after(300, self._fixture_live)
 
-    def _fixture_toggle(self):
-        if self._fixture is not None:
-            fx, self._fixture = self._fixture, None
-            threading.Thread(target=fx.disconnect, daemon=True).start()
-            self.fx_status.config(text="Rozłączono", fg="#666")
-            self.fx_live.config(text="Klapa: —   Tor: —")
-            return
-        self._apply_vars()
-        self.fx_status.config(text="⏳ Łączenie...", fg=C_WARN)
+    def _fixture_disconnect(self):
+        il, rl = self._il, self._rl
+        self._il = self._rl = None
 
         def work():
-            if self.cfg.SIMULATION:
-                from simulators import SimFixture
-                fx = SimFixture("SIM", self.cfg.INTERLOCK_BAUDRATE, relays_enabled=True)
-            else:
-                from interlock import InterlockMonitor
-                fx = InterlockMonitor(self.cfg.INTERLOCK_PORT, int(self.cfg.INTERLOCK_BAUDRATE),
-                                      relays_enabled=True)
-            if not fx.connect():
-                return None
-            fx.start_monitoring()
-            return fx
+            for d in (rl, il):
+                if d is not None:
+                    try:
+                        d.disconnect()
+                    except Exception:
+                        pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _fixture_toggle(self):
+        if self._il is not None or self._rl is not None:
+            self._fixture_disconnect()
+            self._fx_status("Rozłączono", "#666")
+            self.il_live.config(text="Klapa: —")
+            self.rl_live.config(text="Przekaźnik: —")
+            return
+        if self._apply_vars():
+            self._fx_status("✗ Popraw nieprawidłowe wartości w formularzu", C_ERR)
+            return
+        self._fx_status("⏳ Łączenie...", C_WARN)
+
+        def work():
+            from relay import open_fixture
+            return open_fixture(self.cfg, interlock_needed=True, relay_needed=True)
 
         def done(r):
-            if isinstance(r, Exception) or r is None:
-                self.fx_status.config(text=f"✗ Brak połączenia z {self.cfg.INTERLOCK_PORT} {r or ''}", fg=C_ERR)
+            if isinstance(r, Exception):
+                self._fx_status(f"✗ {r}", C_ERR)
                 return
-            self._fixture = r
-            self.fx_status.config(text="✓ Połączono — stan klapy poniżej", fg=C_OK)
+            il, rl, msgs = r
+            self._il, self._rl = il, rl
+            if il is None and rl is None:
+                self._fx_status("✗ " + " | ".join(msgs), C_ERR)
+                return
+            ok = [x for x, d in (("interlock", il), ("przekaźnik", rl)) if d is not None]
+            self._fx_status("✓ Połączono: " + ", ".join(ok) + ("   ✗ " + " | ".join(msgs) if msgs else ""),
+                            C_OK if not msgs else C_WARN)
             self._fixture_live()
         self._bg(work, done)
 
-    def _fixture_path(self, path):
-        fx = self._fixture
-        if fx is None:
-            self.fx_status.config(text="Najpierw połącz z Arduino/STM", fg=C_ERR)
+    def _relay_mode(self, mode):
+        rl = self._rl
+        if rl is None:
+            self.rl_status.config(text="Najpierw połącz z przekaźnikiem", fg=C_ERR)
             return
-        if path == "HIPOT" and not messagebox.askyesno(
-                "Tor HI-POT", "Przełączyć zasilacz na tor Hi-Pot?\nTo NIE załącza wysokiego napięcia "
-                              "(robi to tylko START w Chromie).", parent=self.window):
+        if mode == "HIPOT" and not messagebox.askyesno(
+                "Przekaźnik HI-POT", "Przełączyć zasilacz na Hi-Pot?\nTo NIE załącza wysokiego napięcia "
+                                    "(robi to tylko START w Chromie).", parent=self.window):
             return
-        if path == "LOAD" and not messagebox.askyesno(
-                "Tor OBCIĄŻENIE", "Przełączyć na tor obciążenia?\nZasilacz w gnieździe dostanie 230 V AC.",
+        if mode == "LOAD" and not messagebox.askyesno(
+                "Przekaźnik LOAD", "Przełączyć na test obciążenia?\nZasilacz w gnieździe dostanie 230 V AC.",
                 icon="warning", parent=self.window):
             return
-        self.fx_status.config(text=f"⏳ PATH {path}...", fg=C_WARN)
-        self._bg(lambda: fx.set_path(path, float(self.cfg.RELAY_TIMEOUT)),
-                 lambda r: self.fx_status.config(
+        self._apply_vars()
+        cmd = self.cfg.RELAY_CMD_HIPOT if mode == "HIPOT" else self.cfg.RELAY_CMD_LOAD
+        self.rl_status.config(text=f"⏳ {cmd}...", fg=C_WARN)
+        self._bg(lambda: rl.set_mode(mode),
+                 lambda r: self.rl_status.config(
                      text=f"✗ {r}" if isinstance(r, Exception) else
-                     (f"✓ Potwierdzono: OK PATH {path}" if r[0] else f"✗ {r[1]}"),
+                     (f"✓ Wysłano '{cmd}'" + (f" — odpowiedź: {rl.last_rx}" if rl.last_rx else "")
+                      if r[0] else f"✗ {r[1]}"),
                      fg=C_OK if not isinstance(r, Exception) and r[0] else C_ERR))
+
+    def _relay_raw(self):
+        rl, text = self._rl, self.raw_var.get().strip()
+        if rl is None:
+            self.rl_status.config(text="Najpierw połącz z przekaźnikiem", fg=C_ERR)
+            return
+        if not text:
+            return
+        self._apply_vars()
+        self.rl_status.config(text=f"⏳ {text}...", fg=C_WARN)
+
+        def done(r):
+            if isinstance(r, Exception):
+                self.rl_status.config(text=f"✗ {r}", fg=C_ERR)
+            elif not r[0]:
+                self.rl_status.config(text="✗ Błąd wysyłania", fg=C_ERR)
+            else:
+                self.rl_status.config(text=f"→ {text}\n← " + ("\n← ".join(r[1]) if r[1] else "(brak odpowiedzi)"),
+                                      fg=C_OK if r[1] else "#666")
+        self._bg(lambda: rl.send_raw(text, wait=max(0.5, float(self.cfg.RELAY_TIMEOUT))), done)
 
     # ------------------------------------------------------------------ #
     # PROFILE                                                              #
@@ -629,18 +689,21 @@ class EngPanel:
         k = self._selected()
         if not k:
             return
-        if self._fixture is not None:     # zwolnij port Arduino (exclusive) przed testem w pętli
-            fx, self._fixture = self._fixture, None
+        if self._il is not None or self._rl is not None:   # zwolnij porty (exclusive) przed pętlą
+            il, rl = self._il, self._rl
+            self._il = self._rl = None
             self.window.config(cursor="watch")
             self.window.update_idletasks()
-            fx.disconnect()
+            for d in (rl, il):
+                if d is not None:
+                    d.disconnect()
             self.window.config(cursor="")
-            self.fx_status.config(text="Rozłączono (test w pętli)", fg="#666")
+            self._fx_status("Rozłączono (test w pętli)", "#666")
         self._apply_vars()
         LoopTestWindow(self.window, self.cfg, k)
 
     # ------------------------------------------------------------------ #
-    # LOGI / OGÓLNE / HASŁA                                                #
+    # LOGI / OGÓLNE                                                       #
     # ------------------------------------------------------------------ #
     def _tab_logs(self):
         outer, b = self._page("Logi", "Miejsca zapisu raportów")
@@ -649,11 +712,6 @@ class EngPanel:
         for r, (label, attr) in enumerate(rows):
             var = self._field(b, r, label, attr, width=70)
             tk.Button(b, text="…", width=3, command=lambda v=var: self._browse(v)).grid(row=r, column=2, padx=4)
-        tk.Label(b, text="Raport Hi-Pot ma format Chroma 19052 (bez zmian względem Hi-Pot PSU — odbiór "
-                         "przez IFS).\nRaport obciążenia to osobny plik SN_RRRRMMDDggmmss_LOAD.txt — "
-                         "domyślnie w osobnym katalogu, żeby IFS go nie pobierał.",
-                 bg=self.cfg.COLOR_WHITE, fg="#777", font=("Arial", 9), justify="left"
-                 ).grid(row=3, column=0, columnspan=3, sticky="w", pady=6)
         bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
         bar.pack(anchor="w", padx=16, pady=8)
         st = self._status(outer)
@@ -700,35 +758,6 @@ class EngPanel:
         self._field(b, 2, "Automatyczny zapis raportów:", "AUTO_SAVE_RESULTS", "check")
         self._field(b, 3, "Limit czasu testu Hi-Pot [s]:", "TEST_TIMEOUT", conv=int)
 
-    def _tab_passwords(self):
-        outer, b = self._page("Hasła", "Zmiana haseł (wymaga hasła Admin)")
-        lvl = tk.StringVar(value="ENG")
-        tk.Label(b, text="Poziom:", bg=self.cfg.COLOR_WHITE).grid(row=0, column=0, sticky="w")
-        ttk.Combobox(b, textvariable=lvl, values=["ENG", "Admin"], state="readonly", width=12
-                     ).grid(row=0, column=1, sticky="w")
-        p1, p2 = tk.StringVar(), tk.StringVar()
-        for r, (lab, var) in enumerate((("Nowe hasło:", p1), ("Powtórz:", p2)), 1):
-            tk.Label(b, text=lab, bg=self.cfg.COLOR_WHITE).grid(row=r, column=0, sticky="w", pady=3)
-            tk.Entry(b, textvariable=var, show="*", width=22).grid(row=r, column=1, sticky="w")
-        st = self._status(outer)
-
-        def change():
-            if len(p1.get()) < 4:
-                st.config(text="✗ Minimum 4 znaki", fg=C_ERR)
-                return
-            if p1.get() != p2.get():
-                st.config(text="✗ Hasła się różnią", fg=C_ERR)
-                return
-            level = auth.LEVEL_ADMIN if lvl.get() == "Admin" else auth.LEVEL_ENG
-            ok = auth.set_password(self.cfg, level, p1.get())
-            p1.set("")
-            p2.set("")
-            st.config(text=f"✓ Hasło {lvl.get()} zmienione" if ok else "✗ Błąd zapisu config.json",
-                      fg=C_OK if ok else C_ERR)
-        bar = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
-        bar.pack(anchor="w", padx=16, pady=8)
-        self._btn(bar, "Zmień hasło", change, C_OK)
-
     # ------------------------------------------------------------------ #
     def _save(self):
         before = {a: getattr(self.cfg, a) for a in self.vars}
@@ -747,9 +776,7 @@ class EngPanel:
                                 fg=C_OK if ok else C_ERR)
 
     def _close(self):
-        if self._fixture is not None:
-            fx, self._fixture = self._fixture, None
-            threading.Thread(target=fx.disconnect, daemon=True).start()
+        self._fixture_disconnect()
         try:
             self.window.grab_release()
             self.window.destroy()
@@ -762,7 +789,7 @@ class EngPanel:
 # ====================================================================== #
 class LoopTestWindow:
     """
-    Pełna sekwencja (Hi-Pot + obciążenie) powtarzana N razy na tej samej sztuce
+    Pełna sekwencja (obciążenie + Hi-Pot) powtarzana N razy na tej samej sztuce
     (np. złoty wzorzec). Wyniki tylko do CSV w katalogu testów ENG — nie do IFS
     i nie do statystyk zmiany.
     """
@@ -798,12 +825,9 @@ class LoopTestWindow:
         self.stop_b = tk.Button(top, text="■ Stop", bg=C_ERR, fg="white", font=("Arial", 10, "bold"),
                                 relief=tk.FLAT, padx=12, state="disabled", command=self.abort.set)
         self.stop_b.pack(side=tk.LEFT)
-        tk.Label(self.w, text="Sztuka zostaje w gnieździe przez cały test — klapa musi być zamknięta. "
-                              "Otwarcie klapy przerywa pętlę. Wyniki nie trafiają do IFS.",
-                 bg=c.COLOR_WHITE, fg="#777", font=("Arial", 9)).pack(anchor="w", padx=12)
 
-        cols = ("n", "hp", "hpv", "hpi", "ld", "vmin", "vmax", "imax", "res", "reason")
-        heads = ("#", "Hi-Pot", "Vtm [V]", "Im [mA]", "Obciąż.", "V@MIN", "V@MAX", "I@MAX", "Wynik", "Uwagi")
+        cols = ("n", "ld", "vmin", "vmax", "imax", "hp", "hpv", "hpi", "res", "reason")
+        heads = ("#", "Obciąż.", "V@MIN", "V@MAX", "I@MAX", "Hi-Pot", "Vtm [V]", "Im [mA]", "Wynik", "Uwagi")
         widths = (40, 70, 80, 80, 70, 80, 80, 80, 70, 280)
         tf = tk.Frame(self.w)
         tf.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
@@ -858,7 +882,7 @@ class LoopTestWindow:
         import hipot_runner
         cfg = self.cfg
         ld_on = self.profile["load_params"].get("enabled")
-        ch = oel = fx = None
+        ch = oel = il = rl = None
         try:
             self._ui(self.status.config, {"text": "⏳ Łączenie z urządzeniami...", "fg": C_WARN})
             if cfg.SIMULATION:
@@ -877,33 +901,26 @@ class LoopTestWindow:
                 ok, info = oel.connect()
                 if not ok:
                     raise RuntimeError(f"OEL8512: {info}")
-            if cfg.INTERLOCK_ENABLED or cfg.RELAYS_ENABLED:
-                if cfg.SIMULATION:
-                    from simulators import SimFixture
-                    fx = SimFixture("SIM", cfg.INTERLOCK_BAUDRATE, relays_enabled=cfg.RELAYS_ENABLED)
-                else:
-                    from interlock import InterlockMonitor
-                    fx = InterlockMonitor(cfg.INTERLOCK_PORT, int(cfg.INTERLOCK_BAUDRATE),
-                                          relays_enabled=cfg.RELAYS_ENABLED)
-                if not fx.connect():
-                    raise RuntimeError(f"Arduino/STM ({cfg.INTERLOCK_PORT}): brak połączenia")
-                fx.set_on_change(lambda st: st is not True and self.abort.set())
-                fx.start_monitoring()
+            from relay import open_fixture
+            il, rl, msgs = open_fixture(cfg, interlock_needed=bool(cfg.INTERLOCK_ENABLED))
+            if msgs:
+                raise RuntimeError(" | ".join(msgs))
+            if il is not None:
                 time.sleep(1.2)
-                if cfg.INTERLOCK_ENABLED and fx.is_closed is not True:
+                if il.is_closed is not True:
                     raise RuntimeError("Klapa nie jest zamknięta")
 
             for i in range(1, n + 1):
                 if self.abort.is_set():
                     break
                 self._ui(self.status.config, {"text": f"🔄 Cykl {i}/{n}...", "fg": C_WARN})
-                seq = ComboSequence(cfg, self.profile, ch, oel, fx, self.abort)
+                seq = ComboSequence(cfg, self.profile, ch, oel, rl, il, self.abort)
                 r = seq.run()
                 self._ui(self._add_row, i, r)
-                if r.hipot_status != "PASS" or r.relay_alarm:
-                    # Ta sama sztuka w każdym cyklu — po FAIL/NIEWAŻNYM Hi-Pot nie wolno
-                    # podawać jej 230 V w kolejnym cyklu.
-                    self._ui(self._finish, f"Zatrzymano po cyklu {i}: Hi-Pot {r.hipot_status} — {r.reason}")
+                if r.overall != "PASS" or r.relay_alarm:
+                    # Ta sama sztuka w każdym cyklu — po FAIL/NIEWAŻNYM nie wolno
+                    # podawać jej 230 V (obciążenie) ani HV w kolejnym cyklu.
+                    self._ui(self._finish, f"Zatrzymano po cyklu {i}: {r.overall} — {r.reason}")
                     return
                 if i < n and pause:
                     self.abort.wait(pause)
@@ -911,7 +928,7 @@ class LoopTestWindow:
         except Exception as e:
             self._ui(self._finish, f"✗ {e}")
         finally:
-            for d in (fx, oel, ch):
+            for d in (rl, il, oel, ch):
                 if d is not None:
                     try:
                         d.disconnect()
@@ -921,11 +938,12 @@ class LoopTestWindow:
     def _add_row(self, i, r):
         pts = {p.name: p for p in (r.load.points if r.load else [])}
         hp = r.hipot
-        row = {"cycle": i, "hipot": r.hipot_status, "vtm_v": f"{hp.voltage_v:.0f}" if hp else "",
-               "im_ma": f"{hp.current_ma:.3f}" if hp else "", "load": r.load_status,
+        row = {"cycle": i, "load": r.load_status,
                "v_min": f"{pts['MIN'].v:.3f}" if "MIN" in pts else "",
                "v_max": f"{pts['MAX'].v:.3f}" if "MAX" in pts else "",
                "i_max": f"{pts['MAX'].i:.3f}" if "MAX" in pts else "",
+               "hipot": r.hipot_status, "vtm_v": f"{hp.voltage_v:.0f}" if hp else "",
+               "im_ma": f"{hp.current_ma:.3f}" if hp else "",
                "result": r.overall, "reason": r.reason}
         self.rows.append(row)
         self.tree.insert("", "end", values=tuple(row.values()),

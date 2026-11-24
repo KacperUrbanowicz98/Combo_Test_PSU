@@ -1,37 +1,20 @@
 # auth.py
 """
-Hasła do panelu ENG (hash SHA-256 z solą — w config.json nie ma jawnego hasła).
-
-Poziomy:
-  eng   — panel ENG; przyjmuje hasło ENG albo Admin
-  admin — zmiana haseł; tylko hasło Admin
-Domyślne (ustawiane przy pierwszym starcie): ENG = eng123, Admin = admin123.
+Hasło do panelu ENG — to samo co w pozostałych aplikacjach stanowiskowych.
+W kodzie jest tylko hash SHA-256 z solą, nie jawne hasło.
 """
 import hashlib
 import hmac
 
-LEVEL_NONE, LEVEL_ENG, LEVEL_ADMIN = 0, 1, 2
+_SALT = "combo-psu-reconext"
+_ENG_HASH = "25f68007a6f70ce94d545608d84056fec43fe8e70860e53403869636e885a564"
 
 
-def hash_password(password: str, salt: str) -> str:
+def hash_password(password: str, salt: str = _SALT) -> str:
     return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
 
 
-def check_level(cfg, password: str) -> int:
-    """Zwraca poziom dostępu dla hasła (LEVEL_ADMIN / LEVEL_ENG / LEVEL_NONE)."""
-    h = hash_password(password, cfg.PASSWORD_SALT)
-    if cfg.ADMIN_PASSWORD_HASH and hmac.compare_digest(h, cfg.ADMIN_PASSWORD_HASH):
-        return LEVEL_ADMIN
-    if cfg.ENG_PASSWORD_HASH and hmac.compare_digest(h, cfg.ENG_PASSWORD_HASH):
-        return LEVEL_ENG
-    return LEVEL_NONE
-
-
-def set_password(cfg, level: int, password: str) -> bool:
-    h = hash_password(password, cfg.PASSWORD_SALT)
-    if level == LEVEL_ADMIN:
-        cfg.ADMIN_PASSWORD_HASH = h
-    else:
-        cfg.ENG_PASSWORD_HASH = h
-    print(f"[AUTH] Zmiana hasła {'ADMIN' if level == LEVEL_ADMIN else 'ENG'}")
-    return cfg.save()
+def check_password(password: str) -> bool:
+    ok = hmac.compare_digest(hash_password(password), _ENG_HASH)
+    print(f"[AUTH] Logowanie ENG: {'OK' if ok else 'BŁĘDNE HASŁO'}")
+    return ok

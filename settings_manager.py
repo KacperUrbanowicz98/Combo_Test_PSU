@@ -23,11 +23,19 @@ _FIELDS = [
     ("oel",     "timeout_s",         "OEL_TIMEOUT",         float),
     ("oel",     "inter_cmd_delay_ms", "OEL_DELAY_MS",       int),
     ("oel",     "terminator",        "OEL_TERMINATOR",      str),
-    ("fixture", "com_port",          "INTERLOCK_PORT",      str),
-    ("fixture", "baudrate",          "INTERLOCK_BAUDRATE",  int),
-    ("fixture", "interlock_enabled", "INTERLOCK_ENABLED",   bool),
-    ("fixture", "relays_enabled",    "RELAYS_ENABLED",      bool),
-    ("fixture", "relay_timeout_s",   "RELAY_TIMEOUT",       float),
+    ("interlock", "com_port",        "INTERLOCK_PORT",      str),
+    ("interlock", "baudrate",        "INTERLOCK_BAUDRATE",  int),
+    ("interlock", "enabled",         "INTERLOCK_ENABLED",   bool),
+    ("relay",   "com_port",          "RELAY_PORT",          str),
+    ("relay",   "baudrate",          "RELAY_BAUDRATE",      int),
+    ("relay",   "cmd_load",          "RELAY_CMD_LOAD",      str),
+    ("relay",   "cmd_hipot",         "RELAY_CMD_HIPOT",     str),
+    ("relay",   "terminator",        "RELAY_TERMINATOR",    str),
+    ("relay",   "ack",               "RELAY_ACK",           str),
+    ("relay",   "timeout_s",         "RELAY_TIMEOUT",       float),
+    ("relay",   "settle_ms",         "RELAY_SETTLE_MS",     int),
+    ("relay",   "revert_s",          "RELAY_REVERT_S",      float),
+    ("relay",   "hv_discharge_s",    "HV_DISCHARGE_S",      float),
     ("general", "station_name",      "STATION_NAME",        str),
     ("general", "display_mode",      "DISPLAY_MODE",        str),
     ("general", "auto_save_results", "AUTO_SAVE_RESULTS",   bool),
@@ -35,9 +43,6 @@ _FIELDS = [
     ("general", "log_dir",           "LOG_DIR",             str),
     ("general", "load_log_dir",      "LOAD_LOG_DIR",        str),
     ("general", "eng_log_dir",       "ENG_LOG_DIR",         str),
-    ("security", "salt",             "PASSWORD_SALT",       str),
-    ("security", "eng_password_hash", "ENG_PASSWORD_HASH",  str),
-    ("security", "admin_password_hash", "ADMIN_PASSWORD_HASH", str),
 ]
 
 
@@ -94,11 +99,15 @@ class SettingsManager:
         if isinstance(rs, dict) and "hipot" not in data:
             data.setdefault("hipot", {"com_port": rs.get("com_port"),
                                       "baudrate": rs.get("baudrate")})
-            data.setdefault("fixture", {"com_port": rs.get("interlock_port"),
-                                        "baudrate": rs.get("interlock_baudrate"),
-                                        "interlock_enabled": rs.get("interlock_enabled")})
+            data.setdefault("interlock", {"com_port": rs.get("interlock_port"),
+                                          "baudrate": rs.get("interlock_baudrate"),
+                                          "enabled": rs.get("interlock_enabled")})
             gen = data.get("general") or {}
             data["general"] = gen
+        fx = data.get("fixture")              # config.json z Combo Test PSU 1.0.0
+        if isinstance(fx, dict) and "interlock" not in data:
+            data["interlock"] = {"com_port": fx.get("com_port"), "baudrate": fx.get("baudrate"),
+                                 "enabled": fx.get("interlock_enabled")}
 
         for section, key, attr, typ in _FIELDS:
             sec = data.get(section)

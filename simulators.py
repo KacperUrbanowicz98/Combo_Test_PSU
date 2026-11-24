@@ -1,16 +1,19 @@
 # simulators.py
 """
 Symulatory sprzętu do pracy bez stanowiska (python main.py --sim):
-  * SimChroma   — Chroma 19052 (API jak ChromaHiPotDevice),
-  * SimFixture  — Arduino/STM: klapa + przekaźniki (prawdziwy InterlockMonitor
-                  na fałszywym porcie szeregowym — testuje też protokół),
-  * OEL8512 z zasilaczem — baseline simulator.py + model zasilacza na wyjściu.
+  * SimChroma    — Chroma 19052 (API jak ChromaHiPotDevice); prąd płynie tylko
+                   gdy przekaźnik jest w 'hipot',
+  * SimInterlock — klapa (prawdziwy InterlockMonitor na fałszywym porcie),
+  * SimRelay     — moduł przekaźników: 'load' / 'hipot', sam wraca do LOAD
+                   po RELAY_REVERT_S (prawdziwy RelayController),
+  * OEL8512 z zasilaczem — baseline simulator.py + model zasilacza; zasilacz
+                   daje napięcie tylko gdy przekaźnik jest w 'load'.
 
 Wymuszanie usterek (tylko symulacja) — końcówka SN:
   ...HF  Hi-Pot FAIL (prąd ponad HIGH)
   ...LV  obciążenie: napięcie za niskie
   ...LI  obciążenie: zasilacz nie daje prądu
-  ...RF  przekaźniki nie potwierdzają PATH
+  ...NC  zasilacz niepodłączony (brak napięcia)
 """
 import queue
 import random
@@ -19,16 +22,18 @@ import time
 
 from hipot_device import ChromaHiPotDevice
 from interlock import InterlockMonitor
+from relay import RelayController
 from simulator import OEL85Simulator
 from transport import SimTransport
 
-SIM = {"lid": True, "path": "OFF", "v_nom": 12.0, "fault": None}
+SIM = {"lid": True, "relay": "LOAD", "relay_t": 0.0, "revert_s": 30.0,
+       "v_nom": 12.0, "fault": None}
 _sim_lock = threading.Lock()
 
 
 def set_fault_from_serial(serial: str):
     s = (serial or "").upper()
-    SIM["fault"] = next((f for f in ("HF", "LV", "LI", "RF") if s.endswith(f)), None)
+    SIM["fault"] = next((f for f in ("HF", "LV", "LI", "NC") if s.endswith(f)), None)
 
 
 def configure_psu(profile: dict):
@@ -89,6 +94,8 @@ class SimChroma(ChromaHiPotDevice):
         return True
 
     def _current_a(self):
+        if relay_state() != "HIPOT" or SIM["fault"] == "NC":
+            return 0.0                              # HV nie dochodzi do zasilacza
         lo, hi = float(self._p.get("current_limit_low", 0)), float(self._p.get("current_limit_high", 0.0025))
         if SIM["fault"] == "HF":
             return hi * 1.3
@@ -99,7 +106,11 @@ class SimChroma(ChromaHiPotDevice):
             return "STOP"
         if time.time() - self._t0 < self._total():
             return "TESTING"
-        return "FAIL" if SIM["fault"] == "HF" else "PASS"
+        return "FAIL" if self._judge_fail() else "PASS"
+
+    def _judge_fail(self):
+        lo = float(self._p.get("current_limit_low", 0))
+        return SIM["fault"] == "HF" or (lo > 0 and self._current_a() < lo)
 
     def read_measurements(self):
         if self._t0 is None:
@@ -111,9 +122,14 @@ class SimChroma(ChromaHiPotDevice):
                 "measure_current": self._current_a() * min(1.0, t / ramp), "real_current": 0.0}
 
     def get_test_result(self):
-        fail = SIM["fault"] == "HF"
+        fail = self._judge_fail()
         i_ma = self._current_a() * 1000.0
-        jc = ("17" if self._mode == "AC" else "16") if fail else "116"
+        if not fail:
+            jc = "116"
+        elif SIM["fault"] == "HF":
+            jc = "17" if self._mode == "AC" else "16"
+        else:
+            jc = "18" if self._mode == "AC" else "APP-DCLO"  # prąd poniżej LOW
         return ("FAIL" if fail else "PASS",
                 {"judgment_code": jc, "error_code": jc if fail else "", "comm_ok": True,
                  "output_voltage": float(self._p.get("voltage", 0)),
@@ -121,35 +137,41 @@ class SimChroma(ChromaHiPotDevice):
 
 
 # ====================================================================== #
-# ARDUINO / STM                                                           #
+# KLAPA (Arduino) + PRZEKAŹNIK                                            #
 # ====================================================================== #
-class FakeFixtureSerial:
-    """Emulacja oprogramowania Arduino/STM z fixture_controller.ino."""
+def relay_state() -> str:
+    """Stan modułu przekaźników z automatycznym powrotem do LOAD po REVERT_S."""
+    with _sim_lock:
+        if SIM["relay"] == "HIPOT" and time.time() - SIM["relay_t"] > SIM["revert_s"]:
+            SIM["relay"] = "LOAD"
+        return SIM["relay"]
 
-    def __init__(self):
+
+def _relay_cmd(cmd: str):
+    """Komenda do modułu przekaźników; zwraca linię odpowiedzi (podgląd w ENG)."""
+    c = cmd.strip().lower()
+    if c in ("load", "hipot"):
+        with _sim_lock:
+            SIM["relay"] = "HIPOT" if c == "hipot" else "LOAD"
+            SIM["relay_t"] = time.time()
+        return f"OK {c}"
+    return f"ERR unknown '{cmd.strip()}'"
+
+
+class _FakeSerial:
+    """Wspólna baza: bufor zapisu, kolejka odpowiedzi."""
+
+    def __init__(self, status_lines: bool):
         self.is_open = True
         self._out = queue.Queue()
-        self._last_status = 0.0
-        self._last_cmd = time.time()
         self._buf = b""
-
-    def _emit(self, line):
-        self._out.put(line)
-
-    def _watchdog(self):
-        with _sim_lock:
-            if not SIM["lid"] and SIM["path"] != "OFF":
-                SIM["path"] = "OFF"
-                self._emit("PATH OFF")
-            if SIM["path"] != "OFF" and time.time() - self._last_cmd > 5.0:
-                SIM["path"] = "OFF"
-                self._emit("PATH OFF")
+        self._status = status_lines
+        self._last_status = 0.0
 
     def readline(self):
         deadline = time.time() + 0.3
         while time.time() < deadline:
-            self._watchdog()
-            if time.time() - self._last_status >= 0.3:
+            if self._status and time.time() - self._last_status >= 0.3:
                 self._last_status = time.time()
                 return (("CLOSED" if SIM["lid"] else "OPEN") + "\n").encode()
             try:
@@ -160,35 +182,16 @@ class FakeFixtureSerial:
 
     def write(self, data: bytes):
         self._buf += data
-        while b"\n" in self._buf:
-            line, self._buf = self._buf.split(b"\n", 1)
-            self._handle(line.decode().strip().upper())
+        while True:
+            idx = [i for i in (self._buf.find(b"\n"), self._buf.find(b"\r")) if i >= 0]
+            if not idx:
+                break
+            i = min(idx)
+            line, self._buf = self._buf[:i], self._buf[i + 1:]
+            line = line.decode(errors="ignore").strip()
+            if line:
+                self._out.put(_relay_cmd(line))
         return len(data)
-
-    def _handle(self, cmd):
-        self._last_cmd = time.time()
-        if cmd == "PATH?":
-            self._emit(f"PATH {SIM['path']}")
-            return
-        if cmd.startswith("PATH "):
-            target = cmd.split(None, 1)[1]
-            if target not in ("OFF", "HIPOT", "LOAD"):
-                self._emit("ERR BAD_PATH")
-                return
-            if SIM["fault"] == "RF" and target != "OFF":
-                return                                  # brak potwierdzenia
-            if target != "OFF" and not SIM["lid"]:
-                self._emit("ERR LID_OPEN")
-                return
-
-            def switch():
-                time.sleep(0.12)                        # break-before-make + settle
-                with _sim_lock:
-                    SIM["path"] = target
-                self._emit(f"OK PATH {target}")
-            threading.Thread(target=switch, daemon=True).start()
-            return
-        self._emit("ERR UNKNOWN")
 
     def flush(self):
         pass
@@ -203,21 +206,34 @@ class FakeFixtureSerial:
         self.is_open = False
 
 
-class SimFixture(InterlockMonitor):
+class SimInterlock(InterlockMonitor):
+    """Prawdziwy InterlockMonitor na fałszywym porcie (OPEN/CLOSED co 0.3 s)."""
     OPEN_DELAY = 0.1
 
     def _open_port(self):
-        return FakeFixtureSerial()
+        return _FakeSerial(status_lines=True)
+
+
+class SimRelay(RelayController):
+    """Prawdziwy RelayController na fałszywym porcie modułu przekaźników."""
+    OPEN_DELAY = 0.1
+
+    def __init__(self, cfg, interlock=None):
+        super().__init__(cfg, interlock)
+        SIM["revert_s"] = float(cfg.RELAY_REVERT_S)
+
+    def _open_port(self):
+        return _FakeSerial(status_lines=False)
 
 
 # ====================================================================== #
 # OEL8512 + ZASILACZ                                                      #
 # ====================================================================== #
 class PsuOEL85Simulator(OEL85Simulator):
-    """OEL8512 z podłączonym zasilaczem (tylko gdy przekaźniki są w torze LOAD)."""
+    """OEL8512 z podłączonym zasilaczem (zasilany tylko gdy przekaźnik jest w 'load')."""
 
     def _psu(self):
-        if SIM["path"] != "LOAD":
+        if relay_state() != "LOAD" or SIM["fault"] == "NC":
             return 0.0, 0.0
         vnom = SIM["v_nom"]
         iset = float(self.state.get("CURR", 0.0)) if self.state.get("INP") and self.mode == "CURR" else 0.0

@@ -46,12 +46,15 @@ def configure(device, test_params: dict) -> bool:
 
 def run_hipot(device, test_params: dict, abort: threading.Event,
               test_timeout: float = 300,
-              on_live: Optional[Callable[[float, float, float], None]] = None
+              on_live: Optional[Callable[[float, float, float], None]] = None,
+              max_seconds: Optional[float] = None
               ) -> Tuple[Verdict, str, dict]:
     """
     Zwraca (verdict, wynik_z_chromy, dane). verdict.result: PASS/FAIL/INVALID.
     Przy przerwaniu (abort) zwraca INVALID z reason='ABORT' — wywołujący nie zapisuje wyniku.
     on_live(V, I_mA, elapsed_s).
+    max_seconds — twardy limit z okna przekaźnika (moduł sam wraca do 'load'):
+    po jego przekroczeniu STOP (HV off) i wynik NIEWAŻNY.
     """
     ok, msg = device.start_test()
     if not ok:
@@ -59,6 +62,8 @@ def run_hipot(device, test_params: dict, abort: threading.Event,
 
     tt = total_time(test_params)
     hard_limit = max(tt + TEST_GRACE_SECONDS, min(float(test_timeout), tt + 60))
+    if max_seconds is not None:
+        hard_limit = min(hard_limit, max(0.5, float(max_seconds)))
     min_run_time = min(2.0, max(0.5, tt))
     ev = RunEvidence()
     t0 = time.time()
@@ -95,7 +100,7 @@ def run_hipot(device, test_params: dict, abort: threading.Event,
             # Nie czytamy RESult:LAST — to może być wynik poprzedniej sztuki.
             device.stop_test()
             print("[HIPOT] Przekroczono limit czasu — STOP, test nieważny")
-            return (Verdict(INVALID, "", f"Przekroczono limit czasu testu Hi-Pot ({hard_limit:.0f} s) "
+            return (Verdict(INVALID, "", f"Przekroczono limit czasu testu Hi-Pot ({hard_limit:.1f} s) "
                                          "— HV wyłączone, wynik nieważny"), "UNKNOWN", {})
         time.sleep(0.1)
 
