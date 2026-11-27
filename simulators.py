@@ -14,6 +14,11 @@ Wymuszanie usterek (tylko symulacja) - końcówka SN:
   ...LV  obciążenie: napięcie za niskie
   ...LI  obciążenie: zasilacz nie daje prądu
   ...NC  zasilacz niepodłączony (brak napięcia)
+  ...RN  moduł przekaźników nie odpowiada i nie przełącza (martwy moduł)
+  ...RE  moduł przekaźników odpowiada ERR i nie przełącza
+  ...RL  utrata portu przekaźnika po pierwszej komendzie testu (np. wypięty kabel USB)
+  ...ID  OEL8512 ignoruje co drugą komendę INP pod obciążeniem (jak na stanowisku 26.11.2026)
+  ...IX  OEL8512 ignoruje wszystkie INP 1 pod obciążeniem (wejście nie daje się włączyć)
 """
 import queue
 import random
@@ -27,13 +32,14 @@ from simulator import OEL85Simulator
 from transport import SimTransport
 
 SIM = {"lid": True, "relay": "LOAD", "relay_t": 0.0, "revert_s": 30.0,
-       "v_nom": 12.0, "fault": None}
+       "v_nom": 12.0, "fault": None, "relay_cmds": 0}
 _sim_lock = threading.Lock()
 
 
 def set_fault_from_serial(serial: str):
     s = (serial or "").upper()
-    SIM["fault"] = next((f for f in ("HF", "LV", "LI", "NC") if s.endswith(f)), None)
+    SIM["fault"] = next((f for f in ("HF", "LV", "LI", "NC", "RN", "RE", "RL", "ID", "IX") if s.endswith(f)), None)
+    SIM["relay_cmds"] = 0
 
 
 def configure_psu(profile: dict):
@@ -150,6 +156,11 @@ def relay_state() -> str:
 def _relay_cmd(cmd: str):
     """Komenda do modułu przekaźników; zwraca linię odpowiedzi (podgląd w ENG)."""
     c = cmd.strip().lower()
+    fault = SIM["fault"]
+    if c in ("load", "hipot") and fault == "RN":
+        return None                                  # martwy moduł: cisza, brak przełączenia
+    if c in ("load", "hipot") and fault == "RE":
+        return f"ERR relay fault ({c})"
     if c in ("load", "hipot"):
         with _sim_lock:
             SIM["relay"] = "HIPOT" if c == "hipot" else "LOAD"
@@ -181,6 +192,13 @@ class _FakeSerial:
         return b""
 
     def write(self, data: bytes):
+        if not self.is_open:
+            raise OSError("port zamknięty")
+        if SIM["fault"] == "RL" and not self._status:
+            SIM["relay_cmds"] += 1
+            if SIM["relay_cmds"] > 1:                # pierwsza komenda przechodzi, potem kabel "wypięty"
+                self.is_open = False
+                raise OSError("Urządzenie nie jest podłączone (symulacja RL)")
         self._buf += data
         while True:
             idx = [i for i in (self._buf.find(b"\n"), self._buf.find(b"\r")) if i >= 0]
@@ -190,7 +208,9 @@ class _FakeSerial:
             line, self._buf = self._buf[:i], self._buf[i + 1:]
             line = line.decode(errors="ignore").strip()
             if line:
-                self._out.put(_relay_cmd(line))
+                reply = _relay_cmd(line)
+                if reply is not None:
+                    self._out.put(reply)
         return len(data)
 
     def flush(self):
@@ -231,6 +251,37 @@ class SimRelay(RelayController):
 # ====================================================================== #
 class PsuOEL85Simulator(OEL85Simulator):
     """OEL8512 z podłączonym zasilaczem (zasilany tylko gdy przekaźnik jest w 'load')."""
+
+    # Jak na stanowisku (26.11.2026): z zasilaczem na wejściu INP? po INP 0/1 przez chwilę
+    # zwraca jeszcze stary stan. Bez zasilacza zmiana jest natychmiastowa.
+    INP_LAG_S = 0.35
+    _inp_lag = None
+
+    def _powered(self):
+        return relay_state() == "LOAD" and SIM["fault"] != "NC"
+
+    _inp_count = 0
+
+    def _write(self, c, arg):
+        if c == "INP" and self._powered():
+            self._inp_count += 1
+            want_on = str(arg).strip().upper() in ("1", "ON")
+            if SIM["fault"] == "ID" and self._inp_count % 2 == 1:
+                return None                          # komenda zgubiona, bez ERR
+            if SIM["fault"] == "IX" and want_on:
+                return None
+        if c == "INP":
+            prev = bool(self.state.get("INP"))
+            r = super()._write(c, arg)
+            if bool(self.state.get("INP")) != prev and self._powered():
+                self._inp_lag = (prev, time.time())
+            return r
+        return super()._write(c, arg)
+
+    def _query(self, c, arg):
+        if c == "INP" and self._inp_lag and time.time() - self._inp_lag[1] < self.INP_LAG_S:
+            return "ON" if self._inp_lag[0] else "OFF"
+        return super()._query(c, arg)
 
     def _psu(self):
         if relay_state() != "LOAD" or SIM["fault"] == "NC":

@@ -7,16 +7,26 @@
     "com_port": "COM6",
     "vid_pid": "067B:23A3",
     "baudrate": 115200,
-    "timeout_s": 1.0,
+    "timeout_s": 1.5,
     "inter_cmd_delay_ms": 60,
     "terminator": "\\n"
   },
-  "fixture": {
+  "interlock": {
     "com_port": "COM5",
     "baudrate": 9600,
-    "interlock_enabled": true,
-    "relays_enabled": true,
-    "relay_timeout_s": 3.0
+    "enabled": false
+  },
+  "relay": {
+    "com_port": "COM8",
+    "baudrate": 9600,
+    "cmd_load": "load",
+    "cmd_hipot": "hipot",
+    "terminator": "\\n",
+    "ack": "",
+    "timeout_s": 2.0,
+    "settle_ms": 500,
+    "revert_s": 30.0,
+    "hv_discharge_s": 1.0
   },
   "general": {
     "station_name": "",
@@ -25,11 +35,8 @@
     "test_timeout": 300,
     "log_dir": "logs",
     "load_log_dir": "logs_load",
-    "eng_log_dir": "logs_eng"
-  },
-  "security": {
-    "salt": "oel85-reconext",
-    "eng_password_hash": "3664abc81c91d0d13ad514beb6dbe2a33aba6f28097cc060e47c4226026cdde6",
-    "admin_password_hash": "0cc4cc4e588ea00a2fa512e6ab6562ed92e86077aa78c050f03abbfb78375cd0"
+    "eng_log_dir": "logs_eng",
+    "stats_dir": "",
+    "dashboard_port": 8080
   }
 }

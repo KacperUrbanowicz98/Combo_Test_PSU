@@ -32,6 +32,25 @@ PASS, FAIL, INVALID, ABORTED, SKIP = "PASS", "FAIL", "INVALID", "ABORTED", "SKIP
 
 HIPOT_WINDOW_MARGIN_S = 3.0     # zapas między końcem Hi-Pot a powrotem przekaźnika do 'load'
 
+# Tryb stanowiska (ENG -> Ogólne). Tryby awaryjne tylko na bieżącą sesję - po restarcie COMBO.
+MODE_COMBO, MODE_LOAD_ONLY, MODE_HIPOT_ONLY = "combo", "load_only", "hipot_only"
+MODE_LABELS = {MODE_COMBO: "COMBO (obciążenie + Hi-Pot)",
+               MODE_LOAD_ONLY: "TRYB AWARYJNY: tylko test obciążenia",
+               MODE_HIPOT_ONLY: "TRYB AWARYJNY: tylko Hi-Pot"}
+
+
+def station_mode(cfg) -> str:
+    m = getattr(cfg, "TEST_MODE", MODE_COMBO)
+    return m if m in MODE_LABELS else MODE_COMBO
+
+
+def plan(cfg, profile: dict):
+    """(robić obciążenie, robić Hi-Pot) dla trybu stanowiska i profilu."""
+    mode = station_mode(cfg)
+    load = bool(profile.get("load_params", {}).get("enabled", False)) and mode != MODE_HIPOT_ONLY
+    hipot = mode != MODE_LOAD_ONLY
+    return load, hipot
+
 
 def hipot_fits(cfg, test_params: dict):
     """Czy Hi-Pot z profilu zmieści się w oknie przekaźnika (moduł sam wraca do 'load')."""
@@ -60,10 +79,14 @@ class ComboResult:
     load_report: str = ""
     relay_alarm: bool = False
     lid_tripped: bool = False
+    hipot_off: bool = False         # Hi-Pot wyłączony trybem stanowiska (tylko obciążenie)
+    mode: str = MODE_COMBO
 
     @property
     def hipot_status(self) -> str:
-        return self.hipot.result if self.hipot is not None else SKIP
+        if self.hipot is not None:
+            return self.hipot.result
+        return "OFF" if self.hipot_off else SKIP
 
 
 class ComboSequence:
@@ -100,7 +123,12 @@ class ComboSequence:
 
     @property
     def load_enabled(self) -> bool:
-        return bool(self.profile.get("load_params", {}).get("enabled", False))
+        """Czy w tym teście wykonujemy obciążenie (profil + tryb stanowiska)."""
+        return plan(self.cfg, self.profile)[0]
+
+    @property
+    def hipot_enabled(self) -> bool:
+        return plan(self.cfg, self.profile)[1]
 
     def _phase(self, step: str, text: str):
         if self.on_phase:
@@ -155,8 +183,12 @@ class ComboSequence:
 
     # ------------------------------------------------------------------ #
     def run(self) -> ComboResult:
-        r = ComboResult()
+        r = ComboResult(mode=station_mode(self.cfg))
         r.load_status = SKIP if self.load_enabled else "OFF"
+        r.hipot_off = not self.hipot_enabled
+        if not self.load_enabled and not self.hipot_enabled:
+            r.reason = "Profil nie ma testu obciążenia, a stanowisko jest w trybie 'tylko obciążenie'"
+            return r
         if self.relay is None:
             r.reason = "Brak połączenia z przekaźnikiem - test zablokowany"
             return r
@@ -164,7 +196,7 @@ class ComboSequence:
         if why:
             r.reason = "Klapa otwarta - zamknij klapę" if "Otwarto" in why else why
             return r
-        fits, why = hipot_fits(self.cfg, self.profile["test_params"])
+        fits, why = hipot_fits(self.cfg, self.profile["test_params"]) if self.hipot_enabled else (True, "")
         if not fits:                    # przed obciążeniem - nie podajemy 230 V na darmo
             r.reason, r.hipot_skipped = why, "za długi"
             return r
@@ -218,7 +250,11 @@ class ComboSequence:
                     r.save_errors.append(f"Raport obciążenia: {msg}")
             if lv.result != PASS:
                 r.overall, r.reason = lv.result, lv.reason
-                r.hipot_skipped = "obciążenie " + ("FAIL" if lv.result == FAIL else "NIEWAŻNE")
+                if self.hipot_enabled:
+                    r.hipot_skipped = "obciążenie " + ("FAIL" if lv.result == FAIL else "NIEWAŻNE")
+                return r
+            if not self.hipot_enabled:  # tryb awaryjny: tylko obciążenie
+                r.overall = PASS
                 return r
 
         # 3. Przygotowanie Hi-Pot

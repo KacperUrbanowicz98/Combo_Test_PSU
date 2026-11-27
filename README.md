@@ -1,4 +1,4 @@
-# Reconext Combo Test PSU 1.2.0
+# Reconext Combo Test PSU 1.3.2
 
 Stanowisko testowe zasilaczy: **test obciążenia (OWON OEL8512) + Hi-Pot (Chroma 19052)** w jednym cyklu,
 z przełączaniem zasilacza modułem przekaźników (komendy `load` / `hipot`) i interlockiem klapy.
@@ -18,7 +18,10 @@ python create_exe.py --dashboard        # -> dist/Combo Dashboard/
 ```
 
 Bez logowania HRID - w statystykach i nazwach katalogów zmian jest **nazwa stanowiska**
-(ENG → Ogólne; domyślnie nazwa komputera).
+(ENG → Ogólne; domyślnie nazwa komputera). Na jednym PC może działać tylko jedna kopia aplikacji
+(druga dostaje komunikat - porty COM byłyby zajęte).
+
+Dokumentacja: `INSTRUKCJA_OPERATORA.md`, `INSTRUKCJA_ENG.md`, `CHECKLISTA_TESTOW.md` (testy na sprzęcie).
 
 ## Przebieg testu
 
@@ -122,8 +125,18 @@ Zakładki:
 3. **Przekaźnik** - port, komendy `load` / `hipot`, terminator, oczekiwana odpowiedź, czasy; ręczne LOAD /
    HI-POT, **wysyłanie dowolnej linii z podglądem odpowiedzi** (do rozpoznania protokołu modułu),
 4. **Interlock** - port, baudrate, włącz/wyłącz; podgląd stanu klapy,
-5. **Profile** - włącz/wyłącz, dodaj, edytuj, duplikuj, usuń, **test w pętli**,
-6. **Logi**, 7. **Ogólne**.
+5. **Profile** - włącz/wyłącz, dodaj, edytuj, duplikuj, usuń, **test w pętli**, **eksport CSV** (Excel, do
+   przeglądu parametrów z jakością),
+6. **Logi** - katalogi, port dashboardu, „Sprawdź dostępność” (zapis + zegar PC vs serwer plików),
+7. **Ogólne** - nazwa stanowiska, widok, autozapis, limit czasu, **tryb stanowiska**.
+
+**Tryb stanowiska (awaria jednego testera):** COMBO / tylko test obciążenia / tylko Hi-Pot. Zmiana od razu,
+z potwierdzeniem, tylko do zamknięcia aplikacji (po restarcie COMBO). Czerwony baner na ekranach;
+w statystykach testy pojedyncze liczą się do swojego testu, nie do COMBO. W trybie „tylko obciążenie”
+nie powstaje raport Hi-Pot do IFS.
+
+**Ostrzeżenie o usterce stanowiska:** 3 kolejne FAIL z tym samym kodem (np. LOAD-NC albo Hi-Pot LOW)
+= komunikat dla operatora, że przyczyną może być stanowisko (gniazdo, przewody, przekaźnik), a nie sztuki.
 
 Zmiany konfiguracji i profili są logowane na konsolę (`[ENG] Zmiana konfiguracji: …`).
 
@@ -168,7 +181,8 @@ aplikacja używa jednego połączenia (komendy idą przez port interlocka).
 ## Symulacja (`--sim`)
 
 Końcówka SN wymusza usterkę: `…HF` Hi-Pot FAIL, `…LV` za niskie napięcie, `…LI` zasilacz nie daje prądu,
-`…NC` zasilacz niepodłączony. Przycisk „SIM: klapa” otwiera/zamyka klapę. Symulowany moduł przekaźników
+`…NC` zasilacz niepodłączony, `…RN` przekaźnik nie odpowiada i nie przełącza, `…RE` przekaźnik odpowiada ERR,
+`…RL` utrata portu przekaźnika w trakcie testu. Przycisk „SIM: klapa” otwiera/zamyka klapę. Symulowany moduł przekaźników
 odpowiada `OK load` / `OK hipot` i sam wraca do LOAD po `revert_s`; zasilacz daje napięcie tylko w `load`,
 a prąd Hi-Pot płynie tylko w `hipot`.
 
@@ -178,6 +192,11 @@ a prąd Hi-Pot płynie tylko w `hipot`.
 * `PSU-000005-00`: „Max = -12.85 V” w tabeli potraktowane jako 12.85 V.
 * Wariant widoku (oba testy / jeden po drugim) - do wyboru po testach na żywo.
 * Skrypt testowy dla High Runnera - odłożony.
+* **Bez „Oczekiwanej odpowiedzi” martwy moduł przekaźników nie jest wykrywalny** - zostaje w LOAD,
+  Hi-Pot nie dostaje sztuki i kończy się FAIL LOW (kod 18) zamiast NIEWAŻNY. Po ustaleniu protokołu
+  wpisać odpowiedź modułu w ENG → Przekaźnik.
+* Sekwencja startowa (autotest stanowiska przy uruchomieniu) - po testach na sprzęcie.
+* Moduł USBPD (PSU-000019-00, PSU-000023-00) - czeka na dane urządzenia i parametry testu.
 * Moduł przekaźników: wielkość liter komend, terminator, czy odpowiada (ENG → Przekaźnik → „Wyślij linię”),
   dokładny czas powrotu do `load` i czy liczy go od ostatniej komendy - do sprawdzenia na sprzęcie
   przed pierwszym HV. Port domyślny `COM7` (interlock `COM5`) - ustawić w ENG.

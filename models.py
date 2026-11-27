@@ -259,3 +259,75 @@ class PowerSupplyModels:
     @staticmethod
     def is_default(model_key: str) -> bool:
         return model_key in _DEFAULT_MODELS
+
+
+# ====================================================================== #
+# EKSPORT DO PRZEGLĄDU (ENG -> Profile -> Eksport CSV)                    #
+# ====================================================================== #
+_EXPORT_COLS = [
+    ("PN", lambda k, m: k), ("Aktywny", lambda k, m: "TAK" if m.get("enabled", True) else "NIE"),
+    ("Opis", lambda k, m: m.get("description", "")), ("Urządzenia", lambda k, m: m.get("devices", "")),
+    ("Długość SN", lambda k, m: " lub ".join(str(x) for x in (m.get("serial_length") or []))
+     if isinstance(m.get("serial_length"), list) else m.get("serial_length", "")),
+    ("Hi-Pot tryb", lambda k, m: m["test_params"].get("mode")),
+    ("Hi-Pot napięcie [V]", lambda k, m: m["test_params"].get("voltage")),
+    ("Tolerancja [V]", lambda k, m: m["test_params"].get("voltage_tolerance")),
+    ("Prąd LOW [mA]", lambda k, m: m["test_params"].get("current_limit_low")),
+    ("Prąd HIGH [mA]", lambda k, m: m["test_params"].get("current_limit_high")),
+    ("Ramp [s]", lambda k, m: m["test_params"].get("ramp_time")),
+    ("Test [s]", lambda k, m: m["test_params"].get("test_time")),
+    ("Fall [s]", lambda k, m: m["test_params"].get("fall_time")),
+    ("Częstotliwość [Hz]", lambda k, m: m["test_params"].get("frequency")),
+    ("ARC", lambda k, m: m["test_params"].get("arc_detection")),
+    ("Obciążenie", lambda k, m: "TAK" if m.get("load_params", {}).get("enabled") else "NIE"),
+    ("V nominal [V]", lambda k, m: m.get("load_params", {}).get("v_nominal")),
+    ("V min [V]", lambda k, m: m.get("load_params", {}).get("v_min")),
+    ("V max [V]", lambda k, m: m.get("load_params", {}).get("v_max")),
+    ("I min [A]", lambda k, m: m.get("load_params", {}).get("i_min")),
+    ("I max [A]", lambda k, m: m.get("load_params", {}).get("i_max")),
+    ("Załączenie [s]", lambda k, m: m.get("load_params", {}).get("power_on_delay")),
+    ("Ustalanie [s]", lambda k, m: m.get("load_params", {}).get("settle_time")),
+    ("Próbki", lambda k, m: m.get("load_params", {}).get("samples")),
+    ("Tol. prądu [%]", lambda k, m: m.get("load_params", {}).get("i_tol_pct")),
+    ("Tol. prądu [A]", lambda k, m: m.get("load_params", {}).get("i_tol_abs")),
+]
+
+
+def export_csv(path: str, cfg=None) -> int:
+    """
+    Wszystkie profile do CSV dla Excela (średnik, przecinek dziesiętny, UTF-8 z BOM).
+    Dodatkowe kolumny: moc MAX, czas Hi-Pot i czy mieści się w oknie przekaźnika.
+    Zwraca liczbę profili.
+    """
+    import csv
+
+    def cell(v):
+        if isinstance(v, float):
+            return f"{v:g}".replace(".", ",")
+        return "" if v is None else str(v)
+
+    fits = None
+    if cfg is not None:
+        from combo_sequence import hipot_fits
+        fits = lambda tp: "TAK" if hipot_fits(cfg, tp)[0] else "NIE"   # noqa: E731
+    keys = PowerSupplyModels.get_all_models()
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        head = [h for h, _ in _EXPORT_COLS] + ["Moc przy I max [W]", "Czas Hi-Pot [s]"]
+        if fits:
+            head.append("Hi-Pot mieści się w oknie przekaźnika")
+        w.writerow(head)
+        for k in keys:
+            m = PowerSupplyModels.get_model_info(k)
+            tp, ld = m["test_params"], m.get("load_params", {})
+            row = [cell(fn(k, m)) for _, fn in _EXPORT_COLS]
+            try:
+                row.append(cell(round(float(ld.get("v_nominal", 0)) * float(ld.get("i_max", 0)), 2)))
+            except (TypeError, ValueError):
+                row.append("")
+            row.append(cell(float(tp.get("ramp_time", 0)) + float(tp.get("test_time", 0))
+                            + float(tp.get("fall_time", 0))))
+            if fits:
+                row.append(fits(tp))
+            w.writerow(row)
+    return len(keys)

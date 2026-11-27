@@ -6,7 +6,7 @@ import socket
 from app_paths import app_dir
 
 APP_NAME = "Combo Test PSU"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.2"
 
 
 def decode_term(s: str) -> str:
@@ -71,6 +71,7 @@ class Config:
     ENG_LOG_DIR = "logs_eng"         # testy w pętli z panelu ENG (nie trafiają do IFS)
     STATS_DIR = ""                   # statystyki (wpisy JSONL); pusto = <LOG_DIR>\Combo Stats
     DASHBOARD_PORT = 8080            # port dashboard_server.py
+    TEST_MODE = "combo"              # combo | load_only | hipot_only - tylko na sesję, NIE zapisywany
 
     # Tryb symulacji (tylko z linii poleceń: --sim) - nie zapisywany
     SIMULATION = False
@@ -112,11 +113,26 @@ class Config:
             return self._resolve(self.STATS_DIR, "")
         return os.path.join(self.resolve_log_dir(), "Combo Stats")
 
+    def resolve_oel_port(self) -> str:
+        """Port OEL8512 po VID:PID (gdy ustawiony) - po przepięciu USB numer COM się zmienia."""
+        vp = (self.OEL_VID_PID or "").strip().upper()
+        if vp and not self.SIMULATION:
+            try:
+                from serial.tools import list_ports
+                for p in list_ports.comports():
+                    if p.vid is not None and f"{p.vid:04X}:{p.pid:04X}" == vp:
+                        if p.device != self.OEL_PORT:
+                            print(f"[OEL] VID:PID {vp} -> {p.device} (w ustawieniach {self.OEL_PORT})")
+                        return p.device
+            except Exception as e:
+                print(f"[OEL] Wyszukiwanie portu po VID:PID: {e}")
+        return self.OEL_PORT
+
     def oel_conn(self) -> dict:
         """Słownik połączenia w formacie transport.build_transport() (baseline)."""
         return {
             "transport": "sim" if self.SIMULATION else "serial",
-            "port": self.OEL_PORT,
+            "port": self.resolve_oel_port(),
             "baudrate": int(self.OEL_BAUDRATE),
             "bytesize": 8, "parity": "N", "stopbits": 1,
             "timeout_s": float(self.OEL_TIMEOUT),

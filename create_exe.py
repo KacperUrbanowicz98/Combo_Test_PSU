@@ -12,11 +12,11 @@ import subprocess
 import sys
 
 APP = "Combo Test PSU"
-VERSION = (1, 2, 0, 0)
+VERSION = (1, 3, 2, 0)
 MODULES = ["app_paths", "config", "settings_manager", "auth", "models", "gui", "test_screen",
            "stats_window", "eng_panel", "hipot_device", "hipot_runner", "result_validator",
            "interlock", "relay", "load_tester", "combo_sequence", "oel85", "transport", "simulator",
-           "simulators", "logger", "stats_store"]
+           "simulators", "logger", "stats_store", "instance_lock"]
 DASH_APP = "Combo Dashboard"
 DASH_MODULES = ["app_paths", "config", "settings_manager", "stats_store", "dashboard_page"]
 

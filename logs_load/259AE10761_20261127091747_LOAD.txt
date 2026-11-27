@@ -1,0 +1,30 @@
+OEL8512 Load Test report
+
+Program:	PSU-000006-00
+S/N:		259AE10761
+TIME:		2026/11/27 09:17:47
+Total result:	Pass
+Station:	BYDL044
+Load:		OWON,OEL8512,25160487,FV:V2.0.1
+
+Vnom:		12.000	V
+Vmin:		11.400	V
+Vmax:		12.600	V
+
+STEP:		1
+MODE:		CC MIN
+Iset:		0.000	A
+Vm:		12.263	V
+Im:		0.000	A
+Result:		Pass
+
+STEP:		2
+MODE:		CC MAX
+Iset:		1.420	A
+Vm:		11.792	V
+Im:		1.421	A
+Result:		Pass
+
+Error Code:	
+
+Error Description: 

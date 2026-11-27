@@ -157,21 +157,83 @@ class OELStation:
             if abs(got - value) > tol:
                 raise LoadConfigError(f"{header}: ustawiono {value:g}, OEL ma {got:g}")
 
+    # Na stanowisku (26.11.2026, FW V2.0.1, zasilacz na wejściu) OEL8512 czasem NIE wykonuje
+    # INP 0 / INP 1: brak ERR, INP? przez 1,5 s pokazuje stary stan (oel_traffic.log). Bez zasilacza
+    # w październiku zawsze działało. Dlatego: zapis -> odczyt zwrotny co 50 ms -> po PER_TRY_S
+    # bez zmiany ponowny zapis (max TRIES razy). Każde ponowienie jest logowane ([OEL]).
+    CONFIRM_POLL_S = 0.05
+    CONFIRM_PER_TRY_S = 0.5
+    CONFIRM_TRIES = 3
+
+    def _send_confirm(self, cmd: str, query: str, want: bool):
+        """Zapis + odczyt zwrotny z ponawianiem. Zwraca (czas_s, liczba_zapisów) albo LoadConfigError."""
+        t0 = time.monotonic()
+        resp = ""
+        for attempt in range(1, self.CONFIRM_TRIES + 1):
+            self._write_checked(cmd)
+            t_try = time.monotonic()
+            while True:
+                resp = (self.t.query(query) or "").strip().upper()
+                state = {"1": True, "ON": True, "0": False, "OFF": False}.get(resp)
+                if state == want:
+                    dt = time.monotonic() - t0
+                    if attempt > 1 or dt > 0.2:
+                        print(f"[OEL] {cmd}: potwierdzone po {dt * 1000:.0f} ms, zapisów: {attempt}")
+                    return dt, attempt
+                if time.monotonic() - t_try >= self.CONFIRM_PER_TRY_S:
+                    break
+                time.sleep(self.CONFIRM_POLL_S)
+            print(f"[OEL] {cmd}: brak zmiany po {self.CONFIRM_PER_TRY_S:.1f} s ({query} = {resp}) "
+                  f"- ponawiam ({attempt}/{self.CONFIRM_TRIES})")
+        dt = time.monotonic() - t0
+        raise LoadConfigError(f"{cmd} nie zadziałało: {self.CONFIRM_TRIES} zapisy, po {dt:.1f} s "
+                              f"{query} nadal {resp!r}")
+
     def set_input(self, on: bool):
         with self.lock:
-            self._write_checked(f"INP {1 if on else 0}")
-            resp = (self.t.query("INP?") or "").strip().upper()
-            state = {"1": True, "ON": True, "0": False, "OFF": False}.get(resp)
-            if state is None or state != on:
-                raise LoadConfigError(f"INP?: oczekiwano {int(on)}, OEL zwrócił {resp!r}")
+            return self._send_confirm(f"INP {1 if on else 0}", "INP?", on)
 
     def set_short_off(self):
         """INP:SHOR 0 z weryfikacją - przy zwarciu INP 1 zwarłoby wyjście zasilacza."""
         with self.lock:
-            self._write_checked("INP:SHOR 0")
-            resp = (self.t.query("INP:SHOR?") or "").strip().upper()
-            if resp not in ("0", "OFF"):
-                raise LoadConfigError(f"INP:SHOR?: oczekiwano 0, OEL zwrócił {resp!r}")
+            return self._send_confirm("INP:SHOR 0", "INP:SHOR?", False)
+
+    def input_cycle_test(self, i_set: float, cycles: int = 10, hold_s: float = 0.5, on_progress=None):
+        """
+        Diagnostyka (ENG): N razy INP 1 / INP 0 przy prądzie i_set z zasilaczem na wejściu.
+        Zwraca listę {cycle, on_ms, on_writes, off_ms, off_writes, v, i, error}.
+        """
+        out = []
+        with self.lock:
+            self.safe_off()
+            self.set_short_off()
+            self._write_checked("MODE CURR")
+            self.set_verified("CURR", float(i_set))
+        try:
+            for n in range(1, cycles + 1):
+                row = {"cycle": n, "on_ms": None, "on_writes": None, "off_ms": None, "off_writes": None,
+                       "v": None, "i": None, "error": ""}
+                try:
+                    dt, k = self.set_input(True)
+                    row["on_ms"], row["on_writes"] = round(dt * 1000), k
+                    time.sleep(hold_s)
+                    row["v"], row["i"], _ = self.measure()
+                    dt, k = self.set_input(False)
+                    row["off_ms"], row["off_writes"] = round(dt * 1000), k
+                except Exception as e:
+                    row["error"] = str(e)
+                    self.safe_off()
+                out.append(row)
+                if on_progress:
+                    on_progress(row)
+                time.sleep(0.3)
+        finally:
+            self.safe_off()
+            try:
+                self.set_verified("CURR", 0.0)
+            except Exception:
+                pass
+        return out
 
     def prepare(self, ld: dict):
         """Komplet parametrów przed testem (zwarcie OFF, wejście OFF, CC 0 A, zabezpieczenia, Von)."""
@@ -332,7 +394,7 @@ def run_load_test(st: OELStation, ld: dict, abort: threading.Event,
         return LoadVerdict(PASS, "", "", results)
 
     except LoadConfigError as e:
-        return LoadVerdict(INVALID, "", f"Konfiguracja OEL nie powiodła się: {e}", results)
+        return LoadVerdict(INVALID, "", f"OEL8512 nie potwierdził ustawienia: {e}", results)
     except (TransportError, OEL85Error) as e:
         return LoadVerdict(INVALID, "", f"Utracono komunikację z OEL8512: {e}", results)
     finally:

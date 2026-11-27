@@ -270,13 +270,69 @@ class EngPanel:
         self._btn(bar, "🔌 Testuj (*IDN?)", lambda: self._oel_action(st, "idn"))
         self._btn(bar, "📏 Odczyt V / I", lambda: self._oel_action(st, "meas"))
         self._btn(bar, "⏻ Wejście OFF", lambda: self._oel_action(st, "off"), C_ERR)
+        diag = tk.Frame(outer, bg=self.cfg.COLOR_WHITE)
+        diag.pack(anchor="w", padx=16, pady=(4, 0))
+        tk.Label(diag, text="Test przełączania wejścia (zasilacz w gnieździe):", bg=self.cfg.COLOR_WHITE,
+                 font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+        self.cyc_i = tk.StringVar(value="0.5")
+        self.cyc_n = tk.StringVar(value="10")
+        for lab, var in (("prąd [A]", self.cyc_i), ("cykle", self.cyc_n)):
+            tk.Label(diag, text=lab, bg=self.cfg.COLOR_WHITE).pack(side=tk.LEFT, padx=(10, 3))
+            tk.Entry(diag, textvariable=var, width=6, relief=tk.SOLID, borderwidth=1).pack(side=tk.LEFT)
+        tk.Label(diag, text="", bg=self.cfg.COLOR_WHITE).pack(side=tk.LEFT, padx=4)
+        self._btn(diag, "🔁 Start", lambda: self._oel_cycle_test(st), "#6A1B9A")
 
     def _resolve_oel_port(self):
-        if self.cfg.OEL_VID_PID:
-            for _, dev, vp in list_com_ports():
-                if vp == self.cfg.OEL_VID_PID:
-                    self.cfg.OEL_PORT = dev
-                    return
+        self.cfg.OEL_PORT = self.cfg.resolve_oel_port()
+
+    def _oel_cycle_test(self, st):
+        try:
+            i_set = float(self.cyc_i.get().replace(",", "."))
+            n = max(1, min(100, int(self.cyc_n.get())))
+        except ValueError:
+            st.config(text="✗ Nieprawidłowy prąd / liczba cykli", fg=C_ERR)
+            return
+        if not messagebox.askyesno(
+                "Test przełączania wejścia",
+                f"{n} razy włączyć obciążenie {i_set:g} A i wyłączyć?\n\nZasilacz musi być w gnieździe "
+                "i zasilany (przekaźnik w LOAD), klapa zamknięta.", parent=self.window):
+            return
+        self._apply_vars()
+        st.config(text="⏳ Test przełączania wejścia...", fg=C_WARN)
+
+        def work():
+            from load_tester import OELStation
+            s = OELStation(self.cfg)
+            ok, info = s.connect()
+            if not ok:
+                return None, info
+            try:
+                return s.input_cycle_test(i_set, n), s.idn
+            finally:
+                s.disconnect()
+
+        def done(r):
+            if isinstance(r, Exception):
+                st.config(text=f"✗ {r}", fg=C_ERR)
+                return
+            rows, info = r
+            if rows is None:
+                st.config(text=f"✗ {info}", fg=C_ERR)
+                return
+            bad = [x for x in rows if x["error"]]
+            retry = [x for x in rows if (x["on_writes"] or 1) > 1 or (x["off_writes"] or 1) > 1]
+            on = [x["on_ms"] for x in rows if x["on_ms"] is not None]
+            off = [x["off_ms"] for x in rows if x["off_ms"] is not None]
+            lines = [f"Cykli: {len(rows)}   błędy: {len(bad)}   wymagały ponowienia komendy: {len(retry)}",
+                     f"INP 1 -> ON: min {min(on, default=0)} / max {max(on, default=0)} ms   "
+                     f"INP 0 -> OFF: min {min(off, default=0)} / max {max(off, default=0)} ms"]
+            for x in rows:
+                if x["error"] or x in retry:
+                    lines.append(f"  #{x['cycle']}: ON {x['on_ms']} ms ({x['on_writes']} zapisy), "
+                                 f"OFF {x['off_ms']} ms ({x['off_writes']}) {x['error']}")
+            print("[ENG] Test przełączania wejścia:\n" + "\n".join(lines))
+            st.config(text="\n".join(lines[:12]), fg=C_OK if not bad and not retry else C_ERR)
+        self._bg(work, done)
 
     def _oel_action(self, st, what):
         self._apply_vars()
@@ -489,6 +545,7 @@ class EngPanel:
         self._btn(bar, "⏻ Włącz / wyłącz", self._toggle_profile, "#607D8B")
         self._btn(bar, "🗑 Usuń", self._delete_profile, C_ERR)
         self._btn(bar, "🔁 Test w pętli", self._loop_test, "#6A1B9A")
+        self._btn(bar, "📤 Eksport CSV", self._export_profiles, "#455A64")
         self.prof_status = self._status(outer)
         self._load_tree()
 
@@ -688,6 +745,26 @@ class EngPanel:
         tk.Button(bf, text="Anuluj", bg="#999", fg="white", font=("Arial", 11, "bold"), width=12,
                   relief=tk.FLAT, command=d.destroy).pack(side=tk.LEFT, padx=6)
 
+    def _export_profiles(self):
+        from models import export_csv
+        self._apply_vars()
+        d = self.cfg.resolve_eng_log_dir()
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            d = ""
+        path = filedialog.asksaveasfilename(
+            parent=self.window, title="Eksport profili", defaultextension=".csv",
+            initialdir=d or None, initialfile=f"profile_PSU_{datetime.now():%Y%m%d}.csv",
+            filetypes=[("CSV (Excel)", "*.csv")])
+        if not path:
+            return
+        try:
+            n = export_csv(path, self.cfg)
+            self.prof_status.config(text=f"✓ Wyeksportowano {n} profili: {path}", fg=C_OK)
+        except Exception as e:
+            self.prof_status.config(text=f"✗ Eksport nie powiódł się: {e}", fg=C_ERR)
+
     def _loop_test(self):
         k = self._selected()
         if not k:
@@ -743,6 +820,14 @@ class EngPanel:
                     out.append(f"✓ {d}")
                 except Exception as e:
                     out.append(f"✗ {d}: {e}")
+            import stats_store
+            off = stats_store.check_clock(self.cfg.resolve_stats_dir(), self.cfg.station)
+            if off is None:
+                out.append("✗ Zegar: nie da się porównać z serwerem plików")
+            else:
+                ok = abs(off) <= stats_store.CLOCK_TOLERANCE_S
+                out.append(f"{'✓' if ok else '✗'} Zegar PC vs serwer plików statystyk: {off:+.0f} s"
+                           + ("" if ok else " - przestaw zegar / zgłoś do IT (zmiany liczone z zegara PC)"))
             return out
         self._bg(work, lambda r: st.config(text="\n".join(r) if isinstance(r, list) else f"✗ {r}",
                                            fg=C_OK if isinstance(r, list) and all(x.startswith("✓") for x in r)
@@ -762,6 +847,47 @@ class EngPanel:
         self.vars["DISPLAY_MODE"] = (dm, str)
         self._field(b, 2, "Automatyczny zapis raportów:", "AUTO_SAVE_RESULTS", "check")
         self._field(b, 3, "Limit czasu testu Hi-Pot [s]:", "TEST_TIMEOUT", conv=int)
+
+        # Tryb stanowiska - zmiana od razu (bez "Zapisz"), tylko do zamknięcia aplikacji
+        from combo_sequence import MODE_COMBO, MODE_HIPOT_ONLY, MODE_LOAD_ONLY, station_mode
+        tk.Label(b, text="Tryb stanowiska:", bg=self.cfg.COLOR_WHITE).grid(row=4, column=0, sticky="nw", pady=(12, 3))
+        mf = tk.Frame(b, bg=self.cfg.COLOR_WHITE)
+        mf.grid(row=4, column=1, sticky="w", pady=(12, 3))
+        self.mode_var = tk.StringVar(value=station_mode(self.cfg))
+        for val, txt in ((MODE_COMBO, "COMBO - obciążenie + Hi-Pot (normalna praca)"),
+                         (MODE_LOAD_ONLY, "Awaryjnie: tylko test obciążenia (awaria Hi-Pot)"),
+                         (MODE_HIPOT_ONLY, "Awaryjnie: tylko Hi-Pot (awaria OEL8512)")):
+            tk.Radiobutton(mf, text=txt, value=val, variable=self.mode_var, bg=self.cfg.COLOR_WHITE,
+                           command=self._set_test_mode).pack(anchor="w")
+        self.mode_status = self._status(outer)
+        self._show_mode_status()
+
+    def _show_mode_status(self):
+        from combo_sequence import MODE_COMBO, MODE_LABELS, station_mode
+        m = station_mode(self.cfg)
+        self.mode_status.config(
+            text=("Tryb: " + MODE_LABELS[m]) if m == MODE_COMBO else
+            f"⚠ {MODE_LABELS[m]} - obowiązuje do zamknięcia aplikacji (po restarcie wraca COMBO)",
+            fg="#333" if m == MODE_COMBO else C_ERR)
+
+    def _set_test_mode(self):
+        from combo_sequence import MODE_COMBO, MODE_LABELS, station_mode
+        new, old = self.mode_var.get(), station_mode(self.cfg)
+        if new == old:
+            return
+        if new != MODE_COMBO:
+            skipped = "Hi-Pot (bez raportu do IFS)" if new == "load_only" else "test obciążenia"
+            if not messagebox.askyesno(
+                    "Tryb awaryjny",
+                    f"Włączyć {MODE_LABELS[new]}?\n\nSztuki NIE przejdą testu: {skipped}.\n"
+                    "Na ekranie testu będzie widoczny czerwony baner trybu awaryjnego, a wyniki "
+                    "trafią do statystyk jako testy pojedyncze (nie COMBO).\n\n"
+                    "Tryb obowiązuje do zamknięcia aplikacji.", icon="warning", parent=self.window):
+                self.mode_var.set(old)
+                return
+        self.cfg.TEST_MODE = new
+        print(f"[ENG] Tryb stanowiska: {old} -> {new}")
+        self._show_mode_status()
 
     # ------------------------------------------------------------------ #
     def _save(self):

@@ -60,6 +60,7 @@ class ComboTesterApp:
     # WIDOK SKANOWANIA                                                     #
     # ------------------------------------------------------------------ #
     def _build_scan_view(self):
+        self._mode_shown = getattr(self.config, "TEST_MODE", "combo")
         self._create_header()
         main_frame = tk.Frame(self.root, bg=self.config.COLOR_BG)
         main_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=(20, 60))
@@ -101,6 +102,8 @@ class ComboTesterApp:
         self._after_eng_changes()
 
     def _after_eng_changes(self):
+        if getattr(self, "_mode_shown", None) != getattr(self.config, "TEST_MODE", "combo"):
+            self.show_scan_screen()                 # baner trybu awaryjnego w nagłówku
         # Zmiana katalogu statystyk / nazwy stanowiska w ENG -> nowy rejestrator
         st = self.stats
         if st is None or st.stats_dir != self.config.resolve_stats_dir() or st.station != self.config.station:
@@ -193,7 +196,8 @@ class ComboTesterApp:
         dialog.transient(self.root)
         dialog.grab_set()
         devices = str(info.get("devices", "") or "").strip()
-        w, h = 600, 300 + (18 if len(devices) > 80 else 0)
+        from combo_sequence import MODE_COMBO, station_mode
+        w, h = 600, 300 + (18 if len(devices) > 80 else 0) + (30 if station_mode(c) != MODE_COMBO else 0)
         x = self.root.winfo_screenwidth() // 2 - w // 2
         y = self.root.winfo_screenheight() // 2 - h // 2
         dialog.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
@@ -220,15 +224,27 @@ class ComboTesterApp:
             tk.Label(row, text=value, bg=c.COLOR_WHITE, fg="#111111",
                      font=("Arial", 11)).pack(side=tk.LEFT, padx=(6, 0))
 
-        if ld.get("enabled"):
-            param_line("1. OBCIĄŻENIE:", "#1565C0",
+        from combo_sequence import MODE_COMBO, MODE_LABELS, plan, station_mode
+        do_load, do_hipot = plan(c, info)
+        n = 1
+        if do_load:
+            param_line(f"{n}. OBCIĄŻENIE:" if do_hipot else "OBCIĄŻENIE:", "#1565C0",
                        f"{ld.get('v_min')}-{ld.get('v_max')} V   przy {ld.get('i_min')} A i {ld.get('i_max')} A",
                        (0, 4))
+            n += 1
+        elif ld.get("enabled"):
+            param_line("OBCIĄŻENIE:", "#888888", "WYŁĄCZONE - tryb awaryjny", (0, 4))
         else:
             param_line("OBCIĄŻENIE:", "#1565C0", "wyłączone w profilu (tylko Hi-Pot)", (0, 4))
-        param_line(f"{'2. ' if ld.get('enabled') else ''}HI-POT:", "#C62828",
-                   f"{p.get('mode', '?')}  {p.get('voltage', '?')} V   "
-                   f"limit {p.get('current_limit_low', '?')}-{p.get('current_limit_high', '?')} mA", (0, 8))
+        if do_hipot:
+            param_line(f"{n}. HI-POT:" if do_load else "HI-POT:", "#C62828",
+                       f"{p.get('mode', '?')}  {p.get('voltage', '?')} V   "
+                       f"limit {p.get('current_limit_low', '?')}-{p.get('current_limit_high', '?')} mA", (0, 8))
+        else:
+            param_line("HI-POT:", "#888888", "WYŁĄCZONY - tryb awaryjny", (0, 8))
+        if station_mode(c) != MODE_COMBO:
+            tk.Label(dialog, text=MODE_LABELS[station_mode(c)], bg=c.COLOR_WHITE, fg="#C62828",
+                     font=("Arial", 11, "bold")).pack(pady=(0, 8))
         tk.Frame(dialog, bg="#dddddd", height=1).pack(fill=tk.X, padx=30, pady=(0, 16))
 
         bf = tk.Frame(dialog, bg=c.COLOR_WHITE)
@@ -313,6 +329,10 @@ class ComboTesterApp:
         if c.SIMULATION:
             tk.Label(header, text="SYMULACJA", bg="#FF9800", fg="white",
                      font=("Arial", 11, "bold"), padx=8).pack(side=tk.LEFT, pady=22)
+        from combo_sequence import MODE_COMBO, MODE_LABELS, station_mode
+        if station_mode(c) != MODE_COMBO:
+            tk.Label(header, text=MODE_LABELS[station_mode(c)].upper(), bg="#f44336", fg="white",
+                     font=("Arial", 12, "bold"), padx=10).pack(side=tk.LEFT, padx=10, pady=20)
         tk.Label(header, text=f"Stanowisko: {c.station}", bg=c.COLOR_PRIMARY, fg=c.COLOR_WHITE,
                  font=("Arial", 12, "bold")).pack(side=tk.RIGHT, padx=20, pady=15)
 

@@ -138,7 +138,8 @@ def show_stats_window(parent, config):
                             f"Yield {_pct(s['pass'], s['tests'])}")
         extra.config(text=f"Retesty: {tot['retest']}     FPY (pierwszy test SN): "
                           f"{_pct(tot['first_pass'], tot['first_tests'])}     "
-                          f"Nieważne: {tot['invalid']}     Przerwane: {tot['aborted']}")
+                          f"Nieważne: {tot['invalid']}     Przerwane: {tot['aborted']}"
+                          + (f"     Tryb awaryjny (pojedyncze testy): {tot['single']}" if tot["single"] else ""))
         for t in trees.values():
             t.delete(*t.get_children())
         full = stats_store.build_report(res)

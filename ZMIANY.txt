@@ -1,3 +1,38 @@
+Combo Test PSU - v1.3.2 (26.11.2026, druga poprawka po teście na sprzęcie)
+
+- oel_traffic.log pokazał, że OEL8512 z zasilaczem na wejściu czasem w ogóle nie wykonuje INP 1 / INP 0
+  (brak ERR, INP? przez 1,5 s bez zmiany) - to nie jest samo opóźnienie.
+  Teraz: zapis -> odczyt zwrotny co 50 ms -> po 0,5 s bez zmiany ponowny zapis, maks. 3 zapisy.
+  Każde ponowienie wypisywane w konsoli ([OEL] ... ponawiam). Dotyczy też INP:SHOR 0.
+- ENG -> Test obciążenia OEL8512: test przełączania wejścia (N cykli INP 1 / INP 0 przy zadanym prądzie
+  z zasilaczem w gnieździe) - czasy przełączenia i liczba ponowień.
+- Symulacja: SN ...ID (OEL gubi co drugą komendę INP), ...IX (wejście nie daje się włączyć).
+
+Combo Test PSU - v1.3.1 (poprawka po pierwszym teście na sprzęcie, 26.11.2026)
+
+- OEL8512 z podłączonym zasilaczem przełącza wejście z opóźnieniem: INP? zaraz po INP 0 / INP 1
+  zwracał jeszcze stary stan, co dawało NIEWAŻNY („INP?: oczekiwano 0, OEL zwrócił ON”).
+  Odczyt zwrotny INP? / INP:SHOR? jest teraz powtarzany co 50 ms do 1,5 s; dopiero brak zmiany
+  po tym czasie = NIEWAŻNY. Czas potwierdzenia > 200 ms jest wypisywany w konsoli ([OEL]).
+- Log ruchu OEL8512 (TX/RX z czasem) do oel_traffic.log obok aplikacji (max 3 x 2 MB).
+- Symulator OEL odtwarza opóźnienie przełączania wejścia pod obciążeniem.
+
+Combo Test PSU - v1.3.0
+
+- Tryb stanowiska (ENG -> Ogólne): COMBO / tylko test obciążenia / tylko Hi-Pot - na wypadek awarii
+  jednego z testerów. Tylko do zamknięcia aplikacji, z potwierdzeniem i czerwonym banerem.
+  W statystykach testy pojedyncze nie wchodzą do COMBO ani FPY.
+- Ostrzeżenie „Możliwa usterka stanowiska” po 3 kolejnych FAIL z tym samym kodem.
+- Symulacja awarii przekaźnika (SN ...RN / ...RE / ...RL) i testy tych ścieżek.
+- Blokada drugiej kopii aplikacji (mutex Windows) - instance_lock.py.
+- Kontrola zegara PC względem serwera plików statystyk (co 10 min, ostrzeżenie na ekranie, ENG -> Logi).
+- OEL8512: port wyszukiwany po VID:PID przy każdym połączeniu (wcześniej tylko w panelu ENG).
+- ENG -> Profile -> Eksport CSV (Excel, przecinek dziesiętny) do przeglądu parametrów z jakością.
+- Ctrl+C / Stop w PyCharm nie jest już zapisywany jako awaria w combo_errors.log.
+- Sprawdzone na prawdziwych plikach: migracja config.json / models.json z Hi-Pot PSU i z Combo 1.x,
+  raport Hi-Pot identyczny bajt w bajt z raportem Hi-Pot PSU (odbiór IFS).
+- Dokumentacja: INSTRUKCJA_OPERATORA.md, INSTRUKCJA_ENG.md, CHECKLISTA_TESTOW.md.
+
 Combo Test PSU - v1.2.0
 
 - Nowe statystyki (stats_store.py): każdy test = jeden wpis JSON w pliku stanowiska; liczniki dzienne

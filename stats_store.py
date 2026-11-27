@@ -88,7 +88,7 @@ def day_file(stats_dir: str, station: str, day) -> str:
 def make_record(station: str, pn: str, sn: str, combo: str, load: str, hipot: str,
                 retest: bool = False, load_code: str = "", hipot_code: str = "",
                 reason: str = "", app_version: str = "", sim: bool = False,
-                when: Optional[datetime] = None) -> dict:
+                when: Optional[datetime] = None, mode: str = "combo") -> dict:
     when = when or datetime.now()
     sh = shift_info(when)
     return {
@@ -100,6 +100,7 @@ def make_record(station: str, pn: str, sn: str, combo: str, load: str, hipot: st
         "pn": pn,
         "sn": sn,
         "retest": bool(retest),
+        "mode": mode or "combo",       # combo / load_only / hipot_only (tryb awaryjny)
         "combo": combo,
         "load": load,
         "hipot": hipot,
@@ -141,6 +142,37 @@ def _read_jsonl(path: str) -> List[dict]:
     return out
 
 
+CLOCK_TOLERANCE_S = 120          # [s] większa różnica = ostrzeżenie na ekranie
+CLOCK_CHECK_S = 600              # [s] co ile sprawdzać
+
+
+def check_clock(stats_dir: str, station: str = "") -> Optional[float]:
+    """
+    Różnica (czas serwera plików - czas PC) w sekundach, albo None gdy nie da się sprawdzić.
+    Zmiana i dzień produkcyjny są liczone z zegara PC - przestawiony zegar = test w złej zmianie.
+    Metoda: plik tymczasowy w katalogu statystyk; datę modyfikacji nadaje serwer plików.
+    """
+    path = os.path.join(stats_dir, f".clock_{safe_name(station)}_{os.getpid()}.tmp")
+    try:
+        os.makedirs(stats_dir, exist_ok=True)
+        t0 = time.time()
+        with open(path, "w") as f:
+            f.write("clock")
+            f.flush()
+            os.fsync(f.fileno())
+        t1 = time.time()
+        mtime = os.stat(path).st_mtime
+        os.remove(path)
+        return mtime - (t0 + t1) / 2.0
+    except Exception as e:
+        print(f"[STATS] Kontrola zegara niemożliwa: {e}")
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        return None
+
+
 # ====================================================================== #
 # ZAPIS (stanowisko)                                                      #
 # ====================================================================== #
@@ -157,6 +189,7 @@ class StatsRecorder:
         self.outbox = os.path.join(outbox_dir, OUTBOX_NAME)
         self.last_error: Optional[str] = None
         self.pending = 0                      # wpisy czekające w lokalnej skrzynce
+        self.clock_offset: Optional[float] = None   # [s] zegar serwera plików - zegar PC
         self.on_change = None                 # callback() z wątku tła po wczytaniu/zapisie
         self._lock = threading.Lock()
         self._day = None
@@ -255,6 +288,11 @@ class StatsRecorder:
         except Exception as e:
             self.last_error = str(e)
 
+    def _check_clock(self):
+        self.clock_offset = check_clock(self.stats_dir, self.station)
+        if self.clock_offset is not None and abs(self.clock_offset) > CLOCK_TOLERANCE_S:
+            print(f"[STATS] Zegar PC różni się od serwera plików o {self.clock_offset:+.0f} s")
+
     def _count_pending(self):
         self.pending = len(_read_jsonl(self.outbox)) if os.path.exists(self.outbox) else 0
 
@@ -266,7 +304,9 @@ class StatsRecorder:
         except Exception as e:
             print(f"[STATS] Start: {e}")
             self._loaded.set()
-        last_retry = time.time()
+        self._check_clock()
+        self._notify()
+        last_retry = last_clock = time.time()
         while True:
             try:
                 kind, arg = self._q.get(timeout=1.0)
@@ -276,6 +316,9 @@ class StatsRecorder:
                 break
             try:
                 last_retry = self._step(kind, arg, last_retry)
+                if time.time() - last_clock > CLOCK_CHECK_S:
+                    last_clock = time.time()
+                    self._check_clock()
             except Exception as e:                # wątek zapisu nie może umrzeć
                 print(f"[STATS] Błąd wątku zapisu: {e}")
 
@@ -397,13 +440,21 @@ def _add(c: dict, result: str):
 
 
 def summarize(records: List[dict]) -> dict:
-    """COMBO / OBCIĄŻENIE / HI-POT: testy, PASS, FAIL + retesty, nieważne, przerwane, FPY."""
-    s = {"combo": _blank(), "load": _blank(), "hipot": _blank(),
+    """
+    COMBO / OBCIĄŻENIE / HI-POT: testy, PASS, FAIL + retesty, nieważne, przerwane, FPY.
+    Testy w trybie awaryjnym (tylko obciążenie / tylko Hi-Pot) liczą się do swojego testu,
+    ale NIE do COMBO ani FPY - sztuka nie przeszła pełnego testu. Liczone osobno w 'single'.
+    """
+    s = {"combo": _blank(), "load": _blank(), "hipot": _blank(), "single": 0,
          "retest": 0, "invalid": 0, "aborted": 0, "first_tests": 0, "first_pass": 0}
     first_seen = set()
     for r in records:
         combo = r.get("combo")
-        _add(s["combo"], combo)
+        full = r.get("mode", "combo") == "combo"
+        if full:
+            _add(s["combo"], combo)
+        elif combo in RESULTS:
+            s["single"] += 1
         _add(s["load"], r.get("load"))
         _add(s["hipot"], r.get("hipot"))
         if combo == "INVALID":
@@ -413,6 +464,8 @@ def summarize(records: List[dict]) -> dict:
         if combo in RESULTS:
             if r.get("retest"):
                 s["retest"] += 1
+            if not full:
+                continue
             sn = str(r.get("sn", "")).upper()
             if sn not in first_seen:
                 first_seen.add(sn)
@@ -438,16 +491,18 @@ def build_report(records: List[dict], last_n: int = 25) -> dict:
     for r in records:
         if r.get("combo") not in RESULTS:
             continue
+        if r["combo"] == "FAIL":              # przyczyny FAIL - także z trybu awaryjnego
+            if r.get("load") == "FAIL":
+                codes[f"Obciążenie {r.get('load_code') or '?'}"] += 1
+            elif r.get("hipot") == "FAIL":
+                codes[f"Hi-Pot {r.get('hipot_code') or '?'}"] += 1
+        if r.get("mode", "combo") != "combo":
+            continue                           # wykres godzinowy = testy COMBO
         try:
             h = int(r["ts"][11:13])
         except (KeyError, ValueError):
             continue
         hours[h]["pass" if r["combo"] == "PASS" else "fail"] += 1
-        if r["combo"] == "FAIL":
-            if r.get("load") == "FAIL":
-                codes[f"Obciążenie {r.get('load_code') or '?'}"] += 1
-            elif r.get("hipot") == "FAIL":
-                codes[f"Hi-Pot {r.get('hipot_code') or '?'}"] += 1
     rep["hours"] = [{"hour": h, **v} for h, v in hours.items()]
     rep["fail_codes"] = [{"code": c, "count": n} for c, n in codes.most_common(10)]
     rep["last"] = [{k: r.get(k) for k in ("ts", "shift", "station", "pn", "sn", "combo", "load",

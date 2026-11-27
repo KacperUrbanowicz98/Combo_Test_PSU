@@ -24,7 +24,8 @@ from datetime import datetime
 from tkinter import messagebox
 
 import hipot_runner
-from combo_sequence import ABORTED, FAIL, INVALID, PASS, SKIP, ComboSequence, hipot_fits
+from combo_sequence import (ABORTED, FAIL, INVALID, MODE_COMBO, MODE_LABELS, PASS, SKIP, ComboSequence,
+                            hipot_fits, plan, station_mode)
 from logger import save_load_report, save_report
 import stats_store
 from config import APP_VERSION
@@ -70,6 +71,7 @@ class TestScreen:
         self._recent_results = []
         self._history_frame = None
         self._stats_tick_id = None
+        self._fail_streak = ("", 0)      # (kod, ile razy z rzędu) - podejrzenie usterki stanowiska
         self.sn_dialog = None
         self.sn_entry = None
         self.sn_result_label = None
@@ -93,7 +95,17 @@ class TestScreen:
 
     @property
     def load_enabled(self) -> bool:
-        return bool(self.ld.get("enabled"))
+        """Czy w tym teście jest obciążenie (profil + tryb stanowiska)."""
+        return plan(self.config, self.model_info)[0]
+
+    @property
+    def hipot_enabled(self) -> bool:
+        """Czy w tym teście jest Hi-Pot (tryb stanowiska)."""
+        return plan(self.config, self.model_info)[1]
+
+    @property
+    def emergency(self) -> bool:
+        return station_mode(self.config) != MODE_COMBO
 
     def _alive(self) -> bool:
         if self._closed:
@@ -204,6 +216,9 @@ class TestScreen:
         if c.SIMULATION:
             tk.Label(hf, text="SYMULACJA", bg=C_WARN, fg="white", font=("Arial", 11, "bold"),
                      padx=8).pack(side=tk.LEFT)
+        if self.emergency:
+            tk.Label(hf, text=MODE_LABELS[station_mode(c)].upper(), bg=C_ERR, fg="white",
+                     font=("Arial", 12, "bold"), padx=10).pack(side=tk.LEFT, padx=8)
         tk.Label(hf, text=f"Stanowisko: {self.station}", bg=c.COLOR_PRIMARY, fg=c.COLOR_WHITE,
                  font=("Arial", 12, "bold")).pack(side=tk.RIGHT, padx=20)
         bb = tk.Frame(hf, bg=c.COLOR_WHITE, padx=1, pady=1)
@@ -279,6 +294,10 @@ class TestScreen:
         g.pack(padx=16, pady=6, fill=tk.X)
         p, ld = self.tp, self.ld
 
+        def note(r, text):
+            tk.Label(g, text=text, bg=c.COLOR_WHITE, fg="#333", font=("Arial", 10, "bold")
+                     ).grid(row=r, column=1, columnspan=8, sticky="w")
+
         def item(r, col, lab, val):
             tk.Label(g, text=lab, bg=c.COLOR_WHITE, fg="#666", font=("Arial", 10)
                      ).grid(row=r, column=col, sticky="w", padx=(0, 4))
@@ -292,10 +311,15 @@ class TestScreen:
             item(0, 3, "Punkty CC:", f"{ld['i_min']} A / {ld['i_max']} A")
             item(0, 5, "Nominal:", f"{ld.get('v_nominal', '?')} V")
             item(0, 7, "Ustalanie:", f"{ld.get('power_on_delay', 2)} s + {ld.get('settle_time', 1)} s/pkt")
+        elif self.ld.get("enabled"):
+            note(0, "WYŁĄCZONE - tryb awaryjny stanowiska")
         else:
-            item(0, 1, "", "wyłączone w profilu - tylko Hi-Pot")
+            note(0, "wyłączone w profilu - tylko Hi-Pot")
         tk.Label(g, text="HI-POT", bg=c.COLOR_WHITE, fg=c.COLOR_PRIMARY,
                  font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 12))
+        if not self.hipot_enabled:
+            note(1, "WYŁĄCZONY - tryb awaryjny stanowiska (bez Hi-Pot, bez raportu IFS)")
+            return
         item(1, 1, "Tryb:", p["mode"])
         item(1, 3, "Napięcie:", f"{p['voltage']} V ±{p.get('voltage_tolerance', 0)} V")
         item(1, 5, "Prąd:", f"{p['current_limit_low']}-{p['current_limit_high']} mA")
@@ -331,6 +355,8 @@ class TestScreen:
             self.point_labels[name] = lb
         if not self.load_enabled:
             self._cfg(self.ld_panel.verdict, text="WYŁĄCZONY", bg="#ECEFF1", fg="#888")
+        if not self.hipot_enabled:
+            self._cfg(self.hp_panel.verdict, text="WYŁĄCZONY", bg="#ECEFF1", fg="#888")
         self._layout_panels(active="load" if self.load_enabled else "hipot")
 
     def _make_panel(self, title, fields):
@@ -369,10 +395,10 @@ class TestScreen:
             return
         panel = self.ld_panel if active == "load" else self.hp_panel
         panel.pack(fill=tk.BOTH, expand=True)
-        if self.load_enabled:
+        if self.load_enabled and self.hipot_enabled:
             txt = "Krok 1/2: OBCIĄŻENIE" if active == "load" else "Krok 2/2: HI-POT"
         else:
-            txt = "Krok 1/1: HI-POT"
+            txt = "Krok 1/1: OBCIĄŻENIE" if self.load_enabled else "Krok 1/1: HI-POT"
         self._cfg(self.step_label, text=txt)
 
     def _set_verdict(self, panel, status, reason=""):
@@ -405,8 +431,9 @@ class TestScreen:
 
     def _expected_duration(self):
         c = self.config
-        t = hipot_runner.total_time(self.tp) + 1.0 + float(c.HV_DISCHARGE_S) \
-            + 2 * int(c.RELAY_SETTLE_MS) / 1000.0
+        t = 1.0 + int(c.RELAY_SETTLE_MS) / 1000.0
+        if self.hipot_enabled:
+            t += hipot_runner.total_time(self.tp) + float(c.HV_DISCHARGE_S) + int(c.RELAY_SETTLE_MS) / 1000.0
         if self.load_enabled:
             ld = self.ld
             t += float(ld.get("power_on_delay", 2)) + 2 * (float(ld.get("settle_time", 1))
@@ -539,13 +566,50 @@ class TestScreen:
             return
         s = self.stats.current()
         cb, ld, hp = s["combo"], s["load"], s["hipot"]
+        mode = station_mode(self.config)
+        if mode == "load_only":
+            cb = ld                       # w trybie awaryjnym licznik pokazuje wykonywany test
+        elif mode == "hipot_only":
+            cb = hp
         self._cfg(self.lbl_total, text=str(cb["tests"]))
         self._cfg(self.lbl_pass, text=str(cb["pass"]))
         self._cfg(self.lbl_fail, text=str(cb["fail"]))
         self._cfg(self.lbl_fail_split, text=f"(obc. {ld['fail']} / Hi-Pot {hp['fail']})")
         self._cfg(self.lbl_retests, text=str(s["retest"]))
         n = self.stats.pending
-        self._cfg(self.lbl_offline, text=f"⚠ statystyki offline ({n})" if n else "")
+        warn = [f"⚠ statystyki offline ({n})"] if n else []
+        off = self.stats.clock_offset
+        if off is not None and abs(off) > stats_store.CLOCK_TOLERANCE_S:
+            warn.append(f"⚠ zegar PC różni się od serwera o {abs(off) / 60:.0f} min - zgłoś do IT")
+        self._cfg(self.lbl_offline, text="   ".join(warn))
+
+    STREAK_LIMIT = 3
+    _STREAK_HINTS = {
+        "LOAD-NC": "gniazdo zasilacza, przewody wyjściowe do OEL8512 i przekaźnik (ENG → Przekaźnik)",
+        "HIPOT-18": "przewody Hi-Pot i przekaźnik (czy przełącza na Hi-Pot)",
+        "HIPOT-APP-DCLO": "przewody Hi-Pot i przekaźnik (czy przełącza na Hi-Pot)",
+    }
+
+    def _check_fail_streak(self, res):
+        """Kilka kolejnych FAIL z tym samym kodem = prawdopodobnie usterka stanowiska, nie sztuk."""
+        if res.overall != FAIL:
+            self._fail_streak = ("", 0)
+            return
+        if res.load_status == FAIL:
+            code = getattr(res.load, "error_code", "") or "LOAD"
+        else:
+            code = "HIPOT-" + (getattr(res.hipot, "error_code", "") or "?")
+        prev, n = self._fail_streak
+        n = n + 1 if code == prev else 1
+        self._fail_streak = (code, n)
+        if n == self.STREAK_LIMIT:
+            hint = self._STREAK_HINTS.get(code, "podłączenie urządzeń i przewodów stanowiska")
+            print(f"[STREAK] {n} kolejne FAIL {code}")
+            messagebox.showwarning(
+                "Możliwa usterka stanowiska",
+                f"{n} kolejne sztuki z tym samym błędem ({code}).\n\n"
+                f"To może być usterka stanowiska, a nie zasilaczy.\nSprawdź: {hint}.\n\n"
+                "Jeśli wszystko jest w porządku - kontynuuj testy.", parent=self.parent)
 
     def _record_stats(self, res):
         """Każdy zakończony test = jeden wpis statystyk (PASS/FAIL/NIEWAŻNY/PRZERWANY)."""
@@ -555,7 +619,7 @@ class TestScreen:
             hp = res.hipot
             rec = stats_store.make_record(
                 station=self.station, pn=self.model_info["model_key"], sn=self.serial_number,
-                combo=res.overall, load=res.load_status, hipot=res.hipot_status,
+                combo=res.overall, load=res.load_status, hipot=res.hipot_status, mode=res.mode,
                 retest=bool(self._current_sn_is_duplicate) and res.overall in (PASS, FAIL),
                 load_code=getattr(res.load, "error_code", "") if res.load else "",
                 hipot_code=getattr(hp, "error_code", "") if hp else "",
@@ -574,7 +638,7 @@ class TestScreen:
     # ------------------------------------------------------------------ #
     def _connect_all(self):
         self._cfg(self.status_label, text="⏳ Łączenie z urządzeniami...", fg=C_WARN)
-        self._badge("chroma", "busy")
+        self._badge("chroma", "busy" if self.hipot_enabled else "off")
         self._badge("oel", "busy" if self.load_enabled else "off")
         self._badge("interlock", "busy" if self.config.INTERLOCK_ENABLED else "off")
         self._badge("relay", "busy")
@@ -583,26 +647,27 @@ class TestScreen:
 
     def _connect_worker(self):
         cfg = self.config
-        # --- Chroma
-        if cfg.SIMULATION:
-            from simulators import SimChroma
-            chroma = SimChroma()
-        else:
-            from hipot_device import ChromaHiPotDevice
-            chroma = ChromaHiPotDevice(port=cfg.DEFAULT_COM_PORT, baudrate=cfg.DEFAULT_BAUDRATE)
-        ok = cfg_ok = False
-        try:
-            ok = chroma.connect()
-            if ok:
-                cfg_ok = hipot_runner.configure(chroma, self.tp)
-        except Exception as e:
-            print(f"[HIPOT] Wyjątek przy łączeniu: {e}")
-        if not self._alive():
-            chroma.disconnect()
-            return
-        self.chroma = chroma
-        self._chroma_ok = bool(ok and cfg_ok)
-        self._ui(self._on_chroma_ready, ok, cfg_ok)
+        # --- Chroma (pomijana w trybie awaryjnym "tylko obciążenie")
+        if self.hipot_enabled:
+            if cfg.SIMULATION:
+                from simulators import SimChroma
+                chroma = SimChroma()
+            else:
+                from hipot_device import ChromaHiPotDevice
+                chroma = ChromaHiPotDevice(port=cfg.DEFAULT_COM_PORT, baudrate=cfg.DEFAULT_BAUDRATE)
+            ok = cfg_ok = False
+            try:
+                ok = chroma.connect()
+                if ok:
+                    cfg_ok = hipot_runner.configure(chroma, self.tp)
+            except Exception as e:
+                print(f"[HIPOT] Wyjątek przy łączeniu: {e}")
+            if not self._alive():
+                chroma.disconnect()
+                return
+            self.chroma = chroma
+            self._chroma_ok = bool(ok and cfg_ok)
+            self._ui(self._on_chroma_ready, ok, cfg_ok)
 
         # --- OEL8512
         if self.load_enabled:
@@ -787,11 +852,14 @@ class TestScreen:
     # ------------------------------------------------------------------ #
     def _start_blockers(self, ignore_lid=False):
         p = []
-        if not (self.chroma and self._chroma_ok):
-            p.append("Hi-Pot niepołączony lub nieskonfigurowany")
-        fits, why = hipot_fits(self.config, self.tp)
-        if not fits:
-            p.append(why)
+        if not self.load_enabled and not self.hipot_enabled:
+            p.append("Profil nie ma testu obciążenia - w trybie 'tylko obciążenie' nie ma czego testować")
+        if self.hipot_enabled:
+            if not (self.chroma and self._chroma_ok):
+                p.append("Hi-Pot niepołączony lub nieskonfigurowany")
+            fits, why = hipot_fits(self.config, self.tp)
+            if not fits:
+                p.append(why)
         if self.load_enabled and not (self.oel and self._oel_ok and self.oel.connected):
             p.append("OEL8512 niepołączony - test obciążenia niemożliwy")
         if not (self.relay and self._relay_ok and self.relay.connected):
@@ -838,7 +906,7 @@ class TestScreen:
         self._t0 = time.time()
         self._reset_live()
         self._set_verdict(self.ld_panel, "RUN" if self.load_enabled else SKIP)
-        self._set_verdict(self.hp_panel, "WAIT" if self.load_enabled else "RUN")
+        self._set_verdict(self.hp_panel, ("WAIT" if self.load_enabled else "RUN") if self.hipot_enabled else SKIP)
         self._layout_panels("load" if self.load_enabled else "hipot")
         for w, st in ((self.start_button, "disabled"), (self.stop_button, "normal"),
                       (self.back_button, "disabled"), (self.next_sn_button, "disabled"),
@@ -978,13 +1046,18 @@ class TestScreen:
                       (self.start_button, "disabled")):
             self._cfg(w, state=st)
         self._record_stats(res)
+        if self.relay is not None and not self.relay.connected:
+            self._relay_ok = False
+            self._badge("relay", "err")           # port przekaźnika utracony - wymaga "Połącz ponownie"
 
         # Panele
         if res.load is not None:
             self._show_load_points(res.load)
         elif self.load_enabled and res.load_status in (INVALID, ABORTED):
             self._set_verdict(self.ld_panel, res.load_status, res.reason)
-        if res.hipot is None:
+        if res.hipot is None and res.hipot_off:
+            self._set_verdict(self.hp_panel, SKIP, "Wyłączony - tryb awaryjny stanowiska")
+        elif res.hipot is None:
             if res.hipot_skipped and res.overall not in (ABORTED,):
                 self._set_verdict(self.hp_panel, SKIP, f"Pominięty - {res.hipot_skipped}"
                                   if res.load_status in (FAIL, INVALID) else res.reason)
@@ -1023,11 +1096,14 @@ class TestScreen:
         # PASS / FAIL - liczone w statystykach
         self._serial_consumed = True
         if res.overall == PASS:
-            self._cfg(self.status_label, text="✓ TEST ZALICZONY (PASS)", fg=C_OK)
+            only = {"load_only": " - TYLKO TEST OBCIĄŻENIA, bez Hi-Pot",
+                    "hipot_only": " - TYLKO HI-POT, bez testu obciążenia"}.get(res.mode, "")
+            self._cfg(self.status_label, text=f"✓ TEST ZALICZONY (PASS){only}", fg=C_OK)
         else:
             self._cfg(self.status_label, text=f"✗ TEST NIEZALICZONY (FAIL) - {res.reason}", fg=C_ERR)
         self._add_recent(res)
         self._update_counter()
+        self._check_fail_streak(res)
         if res.save_errors:
             messagebox.showerror("Błąd zapisu raportu",
                                  "Nie udało się zapisać raportu w docelowej lokalizacji:\n\n"
@@ -1169,9 +1245,9 @@ class TestScreen:
         self.serial_number = new_sn
         self._cfg(self.sn_display_label, text=new_sn)
         self._reset_live()
-        self._set_verdict(self.hp_panel, "WAIT")
+        self._set_verdict(self.hp_panel, "WAIT" if self.hipot_enabled else SKIP)
         self._set_verdict(self.ld_panel, "WAIT" if self.load_enabled else SKIP)
-        self._layout_panels("hipot")
+        self._layout_panels("load" if self.load_enabled else "hipot")
         self._cfg(self.status_label, text="Sprawdzanie numeru seryjnego...", fg="#666")
         try:
             self.sn_dialog.grab_release()
